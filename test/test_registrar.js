@@ -1,5 +1,5 @@
-const ENS = artifacts.require('@ensdomains/ens/ENSRegistry.sol');
-const InterimRegistrar = artifacts.require('@ensdomains/ens/HashRegistrarSimplified.sol');
+const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
+const InterimRegistrar = artifacts.require('@ensdomains/ens/Registrar');
 
 const namehash = require('eth-ens-namehash');
 
