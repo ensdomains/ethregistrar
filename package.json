@@ -17,8 +17,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "eth-ens-namehash": "^2.0.8",
     "@ensdomains/ens": "0.1.1",
+    "bluebird": "^3.5.2",
+    "eth-ens-namehash": "^2.0.8",
     "openzeppelin-solidity": "1.11.0",
     "solium": "^1.0.4",
     "truffle": "^4.1.12",

@@ -1,18 +1,23 @@
 pragma solidity ^0.4.20;
 
+import "./PriceOracle.sol";
 import "@ensdomains/ens/contracts/ENS.sol";
 import "@ensdomains/ens/contracts/Deed.sol";
 import "@ensdomains/ens/contracts/HashRegistrarSimplified.sol";
 import "./BaseRegistrar.sol";
 
 contract ETHRegistrar is BaseRegistrar {
-    uint constant INITIAL_RENEWAL_DURATION = 365 days;
-    uint constant TRANSFER_PERIOD = 90 days;
+    uint constant public INITIAL_RENEWAL_DURATION = 365 days;
+    uint constant public TRANSFER_PERIOD = 90 days;
 
     Registrar public previousRegistrar;
+    uint public transferCost;
 
-    constructor(ENS _ens, bytes32 _baseNode, Registrar prev) BaseRegistrar(_ens, _baseNode) public {
+    event NameMigrated(bytes32 indexed hash, address indexed owner, uint expires);
+
+    constructor(ENS _ens, bytes32 _baseNode, PriceOracle _prices, Registrar prev, uint _transferCost) BaseRegistrar(_ens, _baseNode, _prices) public {
         previousRegistrar = prev;
+        transferCost = _transferCost;
     }
 
     /**
@@ -23,8 +28,10 @@ contract ETHRegistrar is BaseRegistrar {
         require(msg.sender == address(previousRegistrar));
         require(registrations[hash].owner == address(0));
 
+        address owner = deed.owner();
+
         // Compute the duration and renewal fee for the initial renewal.
-        uint cost = rentPrice(hash, INITIAL_RENEWAL_DURATION);
+        uint cost = transferCost;
         uint balance = address(deed).balance;
         if(cost > balance) {
             // If a year's rent is more than the deposit, give them a discount.
@@ -35,16 +42,16 @@ contract ETHRegistrar is BaseRegistrar {
         deed.setOwner(this);
         deed.closeDeed(1000);
 
-        // Transfer excess funds back to the domain owner.
-        address owner = deed.owner();
-        owner.transfer(balance - cost);
-
         // Register the name
         doRegister(hash, owner, INITIAL_RENEWAL_DURATION);
+        emit NameMigrated(hash, owner, now + INITIAL_RENEWAL_DURATION);
+
+        // Transfer excess funds back to the domain owner.
+        owner.transfer(balance - cost);
     }
 
-    function available(bytes32 hash) public view returns(bool) {
-        return super.available(hash) && previousRegistrar.state(hash) == Registrar.Mode.Open;
+    function available(string name) public view returns(bool) {
+        return super.available(name) && (now > deployedAt + TRANSFER_PERIOD || previousRegistrar.state(keccak256(name)) == Registrar.Mode.Open);
     }
 
     // Required so that deeds can be paid out
