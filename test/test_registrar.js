@@ -2,6 +2,7 @@ const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const InterimRegistrar = artifacts.require('@ensdomains/ens/Registrar');
 
 const namehash = require('eth-ens-namehash');
+var sha3 = require('web3-utils').sha3;
 
 contract('ETHRegistrar', function (accounts) {
 
@@ -11,7 +12,7 @@ contract('ETHRegistrar', function (accounts) {
     before(async () => {
         ens = await ENS.new();
         interimRegistrar = await InterimRegistrar.new(ens.address, namehash.hash('eth'), 0);
-        await ens.setSubnodeOwner('0x0', web3Utils.sha3('eth'), interimRegistrar.address);
+        await ens.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
     });
 
     it('should allow ownership transfers', async () => {
