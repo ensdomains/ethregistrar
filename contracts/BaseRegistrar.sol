@@ -66,7 +66,7 @@ contract BaseRegistrar is Ownable {
         ens.setSubnodeOwner(baseNode, hash, owner);
     }
 
-    function renew(bytes32 hash, uint duration) public payable owns(hash) isRegistrar {
+    function renew(bytes32 hash, uint duration) public payable isRegistrar {
         uint cost = rentPrice(hash, duration);
         require(cost <= msg.value);
 
