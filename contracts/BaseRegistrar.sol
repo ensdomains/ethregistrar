@@ -1,113 +1,77 @@
 pragma solidity ^0.4.20;
 
-import "./PriceOracle.sol";
 import "@ensdomains/ens/contracts/ENS.sol";
+import "@ensdomains/ens/contracts/HashRegistrar.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 contract BaseRegistrar is Ownable {
-    uint constant GRACE_PERIOD = 30 days;
+    uint constant public GRACE_PERIOD = 30 days;
 
     struct Registration {
         address owner;
         uint expiresAt; // Expiration timestamp
     }
 
-    event NameRegistered(bytes32 indexed hash, string name, address indexed owner, uint expires);
-    event NameRenewed(bytes32 indexed hash, string name, uint expires);
-    event NameTransferred(bytes32 indexed hash, string name, address indexed oldOwner, address indexed newOwner);
+    event ControllerAdded(address indexed controller);
+    event ControllerRemoved(address indexed controller);
+    event NameMigrated(bytes32 indexed hash, address indexed owner, uint expires);
+    event NameRegistered(bytes32 indexed hash, address indexed owner, uint expires);
+    event NameRenewed(bytes32 indexed hash, uint expires);
+    event NameTransferred(bytes32 indexed hash, address indexed oldOwner, address indexed newOwner);
 
-    mapping(bytes32=>Registration) public registrations;
-    uint public deployedAt;
+    // Expiration timestamp for migrated domains.
+    uint public transferPeriodEnds;
+
+    // The ENS registry
     ENS public ens;
+
+    // The namehash of the TLD this registrar owns (eg, .eth)
     bytes32 public baseNode;
-    PriceOracle prices;
 
-    constructor(ENS _ens, bytes32 _baseNode, PriceOracle _prices) public {
-        ens = _ens;
-        baseNode = _baseNode;
-        prices = _prices;
-        deployedAt = now;
-    }
+    // The interim registrar
+    HashRegistrar public previousRegistrar;
 
-    modifier isRegistrar {
-        require(ens.owner(baseNode) == address(this));
-        _;
-    }
+    // A map of addresses that are authorised to register and renew names.
+    mapping(address=>bool) public controllers;
 
-    modifier owns(string name) {
-        bytes32 hash = keccak256(name);
-        require(registrations[hash].owner == msg.sender);
-        require(registrations[hash].expiresAt > now);
-        _;
-    }
+    // A map of name registrations.
+    mapping(bytes32=>Registration) public registrations;
 
-    function rentPrice(string name, uint duration) view public returns(uint) {
-        bytes32 hash = keccak256(name);
-        return prices.price(name, registrations[hash].expiresAt, duration);
-    }
+    // Authorises a controller, who can register and renew domains.
+    function addController(address controller) external;
 
-    function available(string name) public constant returns(bool) {
-        return registrations[keccak256(name)].expiresAt + GRACE_PERIOD < now;
-    }
+    // Revoke controller permission for an address.
+    function removeController(address controller) external;
+
+    // Returns the owner of the specified label hash.
+    function nameOwner(bytes32 label) external view returns(address);
+
+    // Returns the expiration timestamp of the specified label hash.
+    function nameExpires(bytes32 label) external view returns(uint);
+
+    // Returns true iff the specified name is available for registration.
+    function available(bytes32 label) public view returns(bool);
 
     /**
-     * @dev Register or renew a name.
+     * @dev Register a name.
      */
-    function register(string name, address owner, uint duration) public payable isRegistrar {
-        require(available(name));
+    function register(bytes32 label, address owner, uint duration) external returns(uint);
 
-        uint cost = rentPrice(name, duration);
-        require(cost <= msg.value);
-
-        // Transfer back excess funds
-        if(cost < msg.value) {
-            msg.sender.transfer(msg.value - cost);
-        }
-
-        bytes32 hash = keccak256(name);
-        doRegister(hash, owner, duration);
-        ens.setSubnodeOwner(baseNode, hash, owner);
-        emit NameRegistered(hash, name, owner, now + duration);
-    }
-
-    function renew(string name, uint duration) public payable isRegistrar {
-        bytes32 hash = keccak256(name);
-        require(registrations[hash].expiresAt + GRACE_PERIOD >= now);
-
-        uint cost = rentPrice(name, duration);
-        require(cost <= msg.value);
-
-        // Transfer back excess funds
-        if(cost < msg.value) {
-            msg.sender.transfer(msg.value - cost);
-        }
-
-        registrations[hash].expiresAt += duration;
-        emit NameRenewed(hash, name, now + duration);
-    }
-
-    function doRegister(bytes32 hash, address owner, uint duration) internal {
-        registrations[hash] = Registration(owner, now + duration);
-    }
+    function renew(bytes32 label, uint duration) external returns(uint);
 
     /**
      * @dev Transfer ownership of a name to another account.
      */
-    function transfer(string name, address newOwner) public owns(name) {
-        var hash = keccak256(name);
-        emit NameTransferred(hash, name, registrations[hash].owner, newOwner);
-        registrations[hash].owner = newOwner;
-    }
+    function transfer(bytes32 label, address newOwner) external;
 
     /**
      * @dev Reclaim ownership of a name in ENS, if you own it in the registrar.
      */
-    function reclaim(string name) public owns(name) isRegistrar {
-        var hash = keccak256(name);
-        ens.setSubnodeOwner(baseNode, hash, registrations[hash].owner);
-    }
+    function reclaim(bytes32 label) external;
 
-    function withdraw() public onlyOwner {
-        msg.sender.transfer(address(this).balance);
-    }
+    /**
+     * @dev Transfers a registration from the initial registrar.
+     * This function is called by the initial registrar when a user calls `transferRegistrars`.
+     */
+    function acceptRegistrarTransfer(bytes32 label, Deed deed, uint) external;
 }

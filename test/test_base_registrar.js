@@ -1,6 +1,6 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
-const BaseRegistrar = artifacts.require('./BaseRegistrar');
-const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
+const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
+const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 var Promise = require('bluebird');
 
 const namehash = require('eth-ens-namehash');
@@ -32,106 +32,156 @@ async function expectFailure(call) {
 }
 
 contract('BaseRegistrar', function (accounts) {
+    const ownerAccount = accounts[0];
+    const controllerAccount = accounts[1];
+    const registrantAccount = accounts[2];
+    const otherAccount = accounts[3];
 
     let ens;
-    let priceOracle;
+	let interimRegistrar;
     let registrar;
+
+	async function registerOldNames(names, account) {
+        var hashes = names.map(sha3);
+        var value = web3.toWei(0.01, 'ether');
+        var bidHashes = await Promise.map(hashes, (hash) => interimRegistrar.shaBid(hash, account, value, SALT));
+        await interimRegistrar.startAuctions(hashes);
+        await Promise.map(bidHashes, (h) => interimRegistrar.newBid(h, {value: value, from: account}));
+        await advanceTime(3 * DAYS + 1);
+        await Promise.map(hashes, (hash) => interimRegistrar.unsealBid(hash, value, SALT, {from: account}));
+        await advanceTime(2 * DAYS + 1);
+        await Promise.map(hashes, (hash) => interimRegistrar.finalizeAuction(hash, {from: account}));
+        for(var name of names) {
+            assert.equal(await ens.owner(namehash.hash(name + '.eth')), account);
+        }
+    }
 
     before(async () => {
         ens = await ENS.new();
-        priceOracle = await SimplePriceOracle.new(1);
-        registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), priceOracle.address);
+
+		interimRegistrar = await HashRegistrar.new(ens.address, namehash.hash('eth'), 1493895600);
+		await ens.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
+		await registerOldNames(['name', 'name2'], registrantAccount);
+
+		const now = (await web3.eth.getBlock('latest')).timestamp;
+        registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+        await registrar.addController(controllerAccount, {from: ownerAccount});
         await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
     });
 
-    it('should report unused names as available', async () => {
-        assert.equal(await registrar.available(sha3('available')), true);
+	it('should report legacy names as unavailable during the migration period', async () => {
+        assert.equal(await registrar.available(sha3('name2')), false);
+    });
+
+	it('should prohibit registration of legacy names during the migration period', async () => {
+		await expectFailure(registrar.register(sha3("name2"), registrantAccount, 86400, {from: controllerAccount}));
+		var registration = await registrar.registrations(sha3("name2"));
+		assert.equal(registration[0], "0x0000000000000000000000000000000000000000");
+		assert.equal(registration[1].toNumber(), 0);
+	});
+
+    it('should allow transfers from the old registrar', async () => {
+		var balanceBefore = await web3.eth.getBalance(registrantAccount);
+        var receipt = await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
+		/*assert.equal(await web3.eth.getBalance(registrar.address), 0);
+		assert.equal((await web3.eth.getBalance(registrantAccount)) - balanceBefore, web3.toWei(0.01, 'ether'));
+        var registration = await baseRegistrar.registrations(sha3('name'));
+        assert.equal(registration[0], registrantAccount);
+        var now = await web3.eth.getBlock(receipt.receipt.blockHash).timestamp;
+        assert.equal(registration[1], now + (await registrar.INITIAL_RENEWAL_DURATION()).toNumber());*/
     });
 
     it('should allow new registrations', async () => {
-        var tx = await registrar.register("name", accounts[0], 86400, {value: 86400});
+        var tx = await registrar.register(sha3("newname"), registrantAccount, 86400, {from: controllerAccount});
         var block = await web3.eth.getBlock(tx.receipt.blockHash);
-		assert.equal(await ens.owner(namehash.hash("name.eth")), accounts[0]);
-        var registration = await registrar.registrations(sha3("name"));
-		assert.equal(registration[0], accounts[0]);
+		assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
+        var registration = await registrar.registrations(sha3("newname"));
+		assert.equal(registration[0], registrantAccount);
 		assert.equal(registration[1].toNumber(), block.timestamp + 86400);
     });
 
-    it('should refund excess registration funds', async () => {
-        var balanceBefore = await web3.eth.getBalance(accounts[0]);
-        await registrar.register("name2", accounts[0], 86400, {value: 1000000, gasPrice: 0});
-        assert.equal((await web3.eth.getBalance(accounts[0])) - balanceBefore, -86400);
+    it('should allow renewals', async () => {
+        var registration = await registrar.registrations(sha3("newname"));
+        await registrar.renew(sha3("newname"), 86400, {from: controllerAccount});
+        assert.equal((await registrar.registrations(sha3("newname")))[1].toNumber(), registration[1].add(86400).toNumber());
     });
 
-    it('should report registered names as unavailable', async () => {
-        assert.equal(await registrar.available('name'), false);
+    it('should only allow the controller to register', async () => {
+        await expectFailure(registrar.register(sha3("foo"), otherAccount, 86400, {from: otherAccount}));
+    });
+
+    it('should only allow the controller to renew', async () => {
+        await expectFailure(registrar.renew(sha3("newname"), 86400, {from: otherAccount}));
     });
 
     it('should not permit registration of already registered names', async () => {
-        await expectFailure(registrar.register("name", accounts[1], 86400, {value: 86400}));
-		var registration = await registrar.registrations(sha3("name"));
-		assert.equal(registration[0], accounts[0]);
-    });
-
-    it('should allow anyone to renew a name', async () => {
-        var registration = await registrar.registrations(sha3("name"));
-        await registrar.renew("name", 86400, {value: 86400});
-        var newRegistration = await registrar.registrations(sha3("name"));
-        assert.equal(newRegistration[1] - registration[1], 86400);
+        await expectFailure(registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount}));
+		var registration = await registrar.registrations(sha3("newname"));
+		assert.equal(registration[0], registrantAccount);
     });
 
     it('should not permit renewing a name that is not registered', async () => {
-        await expectFailure(registrar.renew("name3", 86400, {value: 86400}));
-    });
-
-    it('should require sufficient value for a renewal', async () => {
-        await expectFailure(registrar.renew("name", 86400));
-    });
-
-    it('should refund excess renewal funds', async () => {
-        var balanceBefore = await web3.eth.getBalance(accounts[0]);
-        await registrar.renew("name", 86400, {value: 1000000, gasPrice: 0})
-        assert.equal((await web3.eth.getBalance(accounts[0])) - balanceBefore, 86400);
+        await expectFailure(registrar.renew(sha3("name3"), 86400, {from: controllerAccount}));
     });
 
     it('should permit the owner to reclaim a name', async () => {
         await ens.setSubnodeOwner("0x0", sha3("eth"), accounts[0]);
-        await ens.setSubnodeOwner(namehash.hash("eth"), sha3("name"), 0);
-        assert.equal(await ens.owner(namehash.hash("name.eth")), "0x0000000000000000000000000000000000000000");
+        await ens.setSubnodeOwner(namehash.hash("eth"), sha3("newname"), 0);
+        assert.equal(await ens.owner(namehash.hash("newname.eth")), "0x0000000000000000000000000000000000000000");
         await ens.setSubnodeOwner("0x0", sha3("eth"), registrar.address);
-        await registrar.reclaim("name");
-        assert.equal(await ens.owner(namehash.hash("name.eth")), accounts[0]);
+        await registrar.reclaim(sha3("newname"), {from: registrantAccount});
+        assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
     });
 
     it('should prohibit anyone else from reclaiming a name', async () => {
-        await expectFailure(registrar.reclaim("name", {from: accounts[1]}));
+        await expectFailure(registrar.reclaim(sha3("newname"), {from: otherAccount}));
     });
 
     it('should permit the owner to transfer a registration', async () => {
-        await registrar.transfer("name", accounts[1]);
-        assert.equal((await registrar.registrations(sha3("name")))[0], accounts[1]);
-        assert.equal(await ens.owner(namehash.hash("name.eth")), accounts[1]);
-        await registrar.transfer("name", accounts[0], {from: accounts[1]});
+        await registrar.transfer(sha3("newname"), otherAccount, {from: registrantAccount});
+        assert.equal((await registrar.registrations(sha3("newname")))[0], otherAccount);
+        // Transfer does not update ENS without a call to reclaim.
+        assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
+        await registrar.transfer(sha3("newname"), registrantAccount, {from: otherAccount});
     });
 
     it('should prohibit anyone else from transferring a registration', async () => {
-        await expectFailure(registrar.transfer("test", accounts[1], {from: accounts[1]}));
+        await expectFailure(registrar.transfer(sha3("newname"), otherAccount, {from: otherAccount}));
     });
 
     it('should not permit transfer or reclaim during the grace period', async () => {
-        await expectFailure(registrar.transfer("test", accounts[1]));
-        await expectFailure(registrar.reclaim("test"));
+		// Advance to the grace period
+        var ts = (await web3.eth.getBlock('latest')).timestamp;
+        var registration = await registrar.registrations(sha3("newname"));
+        await advanceTime(registration[1].toNumber() - ts + 3600);
+
+        await expectFailure(registrar.transfer(sha3("newname"), otherAccount, {from: registrantAccount}));
+        await expectFailure(registrar.reclaim(sha3("newname"), {from: registrantAccount}));
     });
 
-    it('should allow renewal during the grace period', async () =>  {
-        await advanceTime(86400);
-        await registrar.renew("name", 86400, {value: 86400});
+    it('should allow renewal during the grace period', async () => {
+        await registrar.renew(sha3("newname"), 86400, {from: controllerAccount});
     });
 
-    it('should allow the registrar owner to withdraw funds', async () => {
-        var registrarBalance = await web3.eth.getBalance(registrar.address);
-        var balanceBefore = await web3.eth.getBalance(accounts[0]);
-        await registrar.withdraw({gasPrice: 0});
-        assert.equal((await web3.eth.getBalance(accounts[0])) - balanceBefore, registrarBalance.toNumber());
+    it('should allow registration of an expired domain', async () => {
+        var ts = (await web3.eth.getBlock('latest')).timestamp;
+        var registration = await registrar.registrations(sha3("newname"));
+        var grace = (await registrar.GRACE_PERIOD()).toNumber();
+        await advanceTime(registration[1].toNumber() - ts + grace + 3600);
+        await registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount});
+        assert.equal((await registrar.registrations(sha3("newname")))[0], otherAccount);
+    });
+
+	// END OF MIGRATION PERIOD
+
+    it('should show legacy names as available after the migration period', async () => {
+		var ts = (await web3.eth.getBlock('latest')).timestamp;
+        await advanceTime((await registrar.transferPeriodEnds()).toNumber() - ts + 3600);
+        assert.equal(await registrar.available('name2'), true);
+    });
+
+    it('should permit registration of legacy names after the migration period', async () => {
+        await registrar.register(sha3("name2"), accounts[1], 86400, {from: controllerAccount});
+		assert.equal(await ens.owner(namehash.hash("name2.eth")), accounts[1]);
     });
 });
