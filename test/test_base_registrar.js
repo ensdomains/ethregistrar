@@ -83,12 +83,9 @@ contract('BaseRegistrar', function (accounts) {
     it('should allow transfers from the old registrar', async () => {
 		var balanceBefore = await web3.eth.getBalance(registrantAccount);
         var receipt = await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
-		/*assert.equal(await web3.eth.getBalance(registrar.address), 0);
-		assert.equal((await web3.eth.getBalance(registrantAccount)) - balanceBefore, web3.toWei(0.01, 'ether'));
-        var registration = await baseRegistrar.registrations(sha3('name'));
+        var registration = await registrar.registrations(sha3('name'));
         assert.equal(registration[0], registrantAccount);
-        var now = await web3.eth.getBlock(receipt.receipt.blockHash).timestamp;
-        assert.equal(registration[1], now + (await registrar.INITIAL_RENEWAL_DURATION()).toNumber());*/
+        assert.equal(registration[1], (await registrar.transferPeriodEnds()).toNumber());
     });
 
     it('should allow new registrations', async () => {

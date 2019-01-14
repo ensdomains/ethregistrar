@@ -1,7 +1,7 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
-const InterimRegistrar = artifacts.require('@ensdomains/ens/Registrar');
-const BaseRegistrar = artifacts.require('./BaseRegistrar');
-const ETHRegistrar = artifacts.require('./ETHRegistrar');
+const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
+const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
+const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
 const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
 var Promise = require('bluebird');
 
@@ -34,12 +34,16 @@ async function expectFailure(call) {
     }
 }
 
-contract('ETHRegistrar', function (accounts) {
+contract('ETHRegistrarController', function (accounts) {
     let ens;
 	let baseRegistrar;
     let interimRegistrar;
-    let registrar;
+    let controller;
 	let priceOracle;
+
+	const secret = "0x0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+	const ownerAccount = accounts[0]; // Account that owns the registrar
+	const registrantAccount = accounts[1]; // Account that owns test names
 
     async function registerOldNames(names) {
         var hashes = names.map(sha3);
@@ -58,90 +62,81 @@ contract('ETHRegistrar', function (accounts) {
 
     before(async () => {
         ens = await ENS.new();
-        interimRegistrar = await InterimRegistrar.new(ens.address, namehash.hash('eth'), 1493895600);
 
-		baseRegistrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'));
+		interimRegistrar = await HashRegistrar.new(ens.address, namehash.hash('eth'), 1493895600);
+		await ens.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
+		await registerOldNames(['name', 'name2'], registrantAccount);
+
+		const now = (await web3.eth.getBlock('latest')).timestamp;
+        baseRegistrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		await ens.setSubnodeOwner('0x0', sha3('eth'), baseRegistrar.address);
+
 		priceOracle = await SimplePriceOracle.new(1);
-        registrar = await ETHRegistrar.new(
+        controller = await ETHRegistrarController.new(
 			baseRegistrar.address,
 			priceOracle.address,
-			interimRegistrar.address,
-			TRANSFER_COST);
-		await baseRegistrar.addController(registrar.address);
-        await ens.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
-        await registerOldNames(['name', 'name2']);
-        await ens.setSubnodeOwner('0x0', sha3('eth'), baseRegistrar.address);
-    });
-
-    it('should report legacy names as unavailable during the migration period', async () => {
-        assert.equal(await registrar.available('name2'), false);
-    });
-
-	it('should prohibit registration of legacy names during the migration period', async () => {
-		await expectFailure(registrar.register("name2", accounts[0], 86400, {value: 86400}));
-		var registration = await baseRegistrar.registrations(sha3("name2"));
-		assert.equal(registration[0], "0x0000000000000000000000000000000000000000");
-		assert.equal(registration[1].toNumber(), 0);
-	});
-
-    it.only('should allow transfers from the old registrar', async () => {
-		var balanceBefore = await web3.eth.getBalance(accounts[0]);
-        var receipt = await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0});
-		assert.equal(await web3.eth.getBalance(registrar.address), TRANSFER_COST);
-		assert.equal((await web3.eth.getBalance(accounts[0])) - balanceBefore, web3.toWei(0.01, 'ether') - TRANSFER_COST);
-        var registration = await baseRegistrar.registrations(sha3('name'));
-        assert.equal(registration[0], accounts[0]);
-        var now = await web3.eth.getBlock(receipt.receipt.blockHash).timestamp;
-        assert.equal(registration[1], now + (await registrar.INITIAL_RENEWAL_DURATION()).toNumber());
-    });
-
-    // END OF MIGRATION PERIOD
-
-    it('should show legacy names as available after the migration period', async () => {
-        await advanceTime((await registrar.INITIAL_RENEWAL_DURATION()).toNumber());
-        assert.equal(await registrar.available('name2'), true);
-    });
-
-    it('should permit registration of legacy names after the migration period', async () => {
-        await registrar.register("name2", accounts[1], 86400, {value: 86400});
-		assert.equal(await ens.owner(namehash.hash("name2.eth")), accounts[1]);
+			{from: ownerAccount});
+		await baseRegistrar.addController(controller.address, {from: ownerAccount});
     });
 
 	it('should report unused names as available', async () => {
-        assert.equal(await registrar.available(sha3('available')), true);
+        assert.equal(await controller.available(sha3('available')), true);
     });
 
-    it('should refund excess registration funds', async () => {
-        var balanceBefore = await web3.eth.getBalance(accounts[0]);
-        await registrar.register("name2", accounts[0], 86400, {value: 1000000, gasPrice: 0});
-        assert.equal((await web3.eth.getBalance(accounts[0])) - balanceBefore, -86400);
+	it('should report registered names as unavailable', async () => {
+        assert.equal(await controller.available('name'), false);
     });
 
-    it('should report registered names as unavailable', async () => {
-        assert.equal(await registrar.available('name'), false);
-    });
+	it('should permit new registrations', async () => {
+		var commitment = await controller.makeCommitment("newname", secret);
+		var tx = await controller.commit(commitment);
+		assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
+
+		await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+		var balanceBefore = await web3.eth.getBalance(controller.address);
+		var tx = await controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS + 1, gasPrice: 0});
+		assert.equal(tx.logs.length, 1);
+		assert.equal(tx.logs[0].event, "NameRegistered");
+		assert.equal(tx.logs[0].args.name, "newname");
+		assert.equal(tx.logs[0].args.owner, registrantAccount);
+		assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 28 * DAYS);
+	});
+
+	it('should return funds for duplicate registrations', async () => {
+		await controller.commit(await controller.makeCommitment("newname", secret));
+
+		await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+		var balanceBefore = await web3.eth.getBalance(controller.address);
+		var tx = await controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
+		assert.equal(tx.logs.length, 0);
+		assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 0);
+	});
+
+	it('should return funds for expired commitments', async () => {
+		await controller.commit(await controller.makeCommitment("newname2", secret));
+
+		await advanceTime((await controller.MAX_COMMITMENT_AGE()).toNumber() + 1);
+		var balanceBefore = await web3.eth.getBalance(controller.address);
+		var tx = await controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
+		assert.equal(tx.logs.length, 0);
+		assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 0);
+	});
 
     it('should allow anyone to renew a name', async () => {
         var registration = await baseRegistrar.registrations(sha3("name"));
-        await registrar.renew("name", 86400, {value: 86400});
+		var balanceBefore = await web3.eth.getBalance(controller.address);
+        await controller.renew("name", 86400, {value: 86400 + 1});
         var newRegistration = await baseRegistrar.registrations(sha3("name"));
         assert.equal(newRegistration[1] - registration[1], 86400);
+		assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 86400);
     });
 
     it('should require sufficient value for a renewal', async () => {
-        await expectFailure(registrar.renew("name", 86400));
-    });
-
-    it('should refund excess renewal funds', async () => {
-        var balanceBefore = await web3.eth.getBalance(accounts[0]);
-        await registrar.renew("name", 86400, {value: 1000000, gasPrice: 0})
-        assert.equal((await web3.eth.getBalance(accounts[0])) - balanceBefore, 86400);
+        await expectFailure(controller.renew("name", 86400));
     });
 
     it('should allow the registrar owner to withdraw funds', async () => {
-        var registrarBalance = await web3.eth.getBalance(registrar.address);
-        var balanceBefore = await web3.eth.getBalance(accounts[0]);
-        await registrar.withdraw({gasPrice: 0});
-        assert.equal((await web3.eth.getBalance(accounts[0])) - balanceBefore, registrarBalance.toNumber());
+        await controller.withdraw({gasPrice: 0, from: ownerAccount});
+		assert.equal((await web3.eth.getBalance(controller.address)).toNumber(),  0);
     });
 });
