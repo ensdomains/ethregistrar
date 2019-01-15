@@ -1,4 +1,4 @@
-pragma solidity ^0.4.20;
+pragma solidity ^0.4.24;
 
 import "./PriceOracle.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
@@ -13,9 +13,9 @@ contract SimplePriceOracle is Ownable, PriceOracle {
         setPrice(_rentPrice);
     }
 
-    function setPrice(uint _rentPrice) {
+    function setPrice(uint _rentPrice) onlyOwner {
         rentPrice = _rentPrice;
-        RentPriceChanged(_rentPrice);
+        emit RentPriceChanged(_rentPrice);
     }
 
     /**

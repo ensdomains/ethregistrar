@@ -1,13 +1,16 @@
-pragma solidity ^0.4.20;
+pragma solidity ^0.4.24;
 
 import "./PriceOracle.sol";
 import "./BaseRegistrar.sol";
+import "./StringUtils.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 /**
  * @dev A registrar controller for registering and renewing names at fixed cost.
  */
 contract ETHRegistrarController is Ownable {
+    using StringUtils for *;
+
     uint constant public MIN_COMMITMENT_AGE = 1 hours;
     uint constant public MAX_COMMITMENT_AGE = 48 hours;
     uint constant public MIN_REGISTRATION_DURATION = 28 days;
@@ -32,7 +35,7 @@ contract ETHRegistrarController is Ownable {
     }
 
     function valid(string name) public view returns(bool) {
-        return strlen(name) > 6;
+        return name.strlen() > 6;
     }
 
     function available(string name) public view returns(bool) {
@@ -96,40 +99,5 @@ contract ETHRegistrarController is Ownable {
 
     function withdraw() public onlyOwner {
         msg.sender.transfer(address(this).balance);
-    }
-
-    /**
-     * @dev Returns the length of a given string
-     *
-     * @param s The string to measure the length of
-     * @return The length of the input string
-     */
-    function strlen(string s) internal pure returns (uint) {
-        s; // Don't warn about unused variables
-        // Starting here means the LSB will be the byte we care about
-        uint ptr;
-        uint end;
-        assembly {
-            ptr := add(s, 1)
-            end := add(mload(s), ptr)
-        }
-        for (uint len = 0; ptr < end; len++) {
-            uint8 b;
-            assembly { b := and(mload(ptr), 0xFF) }
-            if (b < 0x80) {
-                ptr += 1;
-            } else if (b < 0xE0) {
-                ptr += 2;
-            } else if (b < 0xF0) {
-                ptr += 3;
-            } else if (b < 0xF8) {
-                ptr += 4;
-            } else if (b < 0xFC) {
-                ptr += 5;
-            } else {
-                ptr += 6;
-            }
-        }
-        return len;
     }
 }
