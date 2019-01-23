@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.5.0;
 
 import "./PriceOracle.sol";
 import "./BaseRegistrar.sol";
@@ -29,21 +29,21 @@ contract ETHRegistrarController is Ownable {
         prices = _prices;
     }
 
-    function rentPrice(string name, uint duration) view public returns(uint) {
+    function rentPrice(string memory name, uint duration) view public returns(uint) {
         bytes32 hash = keccak256(bytes(name));
         return prices.price(name, base.nameExpires(hash), duration);
     }
 
-    function valid(string name) public view returns(bool) {
+    function valid(string memory name) public view returns(bool) {
         return name.strlen() > 6;
     }
 
-    function available(string name) public view returns(bool) {
+    function available(string memory name) public view returns(bool) {
         bytes32 label = keccak256(bytes(name));
         return valid(name) && base.available(label);
     }
 
-    function makeCommitment(string name, bytes32 secret) pure public returns(bytes32) {
+    function makeCommitment(string memory name, bytes32 secret) pure public returns(bytes32) {
         bytes32 label = keccak256(bytes(name));
         return keccak256(abi.encodePacked(label, secret));
     }
@@ -53,7 +53,7 @@ contract ETHRegistrarController is Ownable {
         commitments[commitment] = now;
     }
 
-    function register(string name, address owner, uint duration, bytes32 secret) external payable {
+    function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
         // Require a valid commitment
         bytes32 commitment = makeCommitment(name, secret);
         require(commitments[commitment] + MIN_COMMITMENT_AGE <= now);
@@ -78,7 +78,7 @@ contract ETHRegistrarController is Ownable {
         }
     }
 
-    function renew(string name, uint duration) external payable {
+    function renew(string calldata name, uint duration) external payable {
         uint cost = rentPrice(name, duration);
         require(msg.value >= cost);
 

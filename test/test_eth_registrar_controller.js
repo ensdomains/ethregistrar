@@ -7,12 +7,13 @@ var Promise = require('bluebird');
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
+const toBN = require('web3-utils').toBN;
 
 const DAYS = 24 * 60 * 60;
 const SALT = sha3('foo');
-const TRANSFER_COST = web3.toWei(0.005, 'ether');
+
 const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.sendAsync({
+	web3.currentProvider.send({
 		jsonrpc: "2.0",
 		"method": "evm_increaseTime",
 		params: [delay]}, done)
@@ -27,7 +28,7 @@ async function expectFailure(call) {
 		// Assert ganache revert exception
 		assert.equal(
 			error.message,
-			'VM Exception while processing transaction: revert'
+			'Returned error: VM Exception while processing transaction: revert'
 		);
 	}
 	if(tx !== undefined) {
@@ -48,7 +49,7 @@ contract('ETHRegistrarController', function (accounts) {
 
 	async function registerOldNames(names) {
 		var hashes = names.map(sha3);
-		var value = web3.toWei(0.01, 'ether');
+		var value = toBN(10000000000000000);
 		var bidHashes = await Promise.map(hashes, (hash) => interimRegistrar.shaBid(hash, accounts[0], value, SALT));
 		await interimRegistrar.startAuctions(hashes);
 		await Promise.map(bidHashes, (h) => interimRegistrar.newBid(h, {value: value}));
@@ -138,6 +139,6 @@ contract('ETHRegistrarController', function (accounts) {
 
 		it('should allow the registrar owner to withdraw funds', async () => {
 			await controller.withdraw({gasPrice: 0, from: ownerAccount});
-			assert.equal((await web3.eth.getBalance(controller.address)).toNumber(),  0);
+			assert.equal(await web3.eth.getBalance(controller.address), 0);
 		});
 	});

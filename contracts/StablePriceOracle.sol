@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.5.0;
 
 import "./PriceOracle.sol";
 import "./SafeMath.sol";
@@ -6,7 +6,7 @@ import "./StringUtils.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 interface DSValue {
-    function read() view returns (bytes32);
+    function read() external view returns (bytes32);
 }
 
 // StablePriceOracle sets a price in USD, based on an oracle.
@@ -23,7 +23,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
     event OracleChanged(address oracle);
     event RentPriceChanged(uint[] prices);
 
-    constructor(DSValue _usdOracle, uint[] _rentPrices) {
+    constructor(DSValue _usdOracle, uint[] memory _rentPrices) public {
         setOracle(_usdOracle);
         setPrices(_rentPrices);
     }
@@ -32,9 +32,9 @@ contract StablePriceOracle is Ownable, PriceOracle {
      * @dev Sets the price oracle address
      * @param _usdOracle The address of the price oracle to use.
      */
-    function setOracle(DSValue _usdOracle) onlyOwner {
+    function setOracle(DSValue _usdOracle) public onlyOwner {
         usdOracle = _usdOracle;
-        emit OracleChanged(_usdOracle);
+        emit OracleChanged(address(_usdOracle));
     }
 
     /**
@@ -43,7 +43,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
      *                    name length; names longer than the length of the array
      *                    default to the price of the last element.
      */
-    function setPrices(uint[] _rentPrices) onlyOwner {
+    function setPrices(uint[] memory _rentPrices) public onlyOwner {
         rentPrices = _rentPrices;
         emit RentPriceChanged(_rentPrices);
     }
@@ -51,11 +51,10 @@ contract StablePriceOracle is Ownable, PriceOracle {
     /**
      * @dev Returns the price to register or renew a name.
      * @param name The name being registered or renewed.
-     * @param expires When the name presently expires (0 if this is a new registration).
      * @param duration How long the name is being registered or extended for, in seconds.
      * @return The price of this renewal or registration, in wei.
      */
-    function price(string name, uint expires, uint duration) view public returns(uint) {
+    function price(string calldata name, uint /*expires*/, uint duration) view external returns(uint) {
         uint len = name.strlen();
         require(len > 0);
         if(len > rentPrices.length) {

@@ -2,6 +2,8 @@ const DummyOracle = artifacts.require('./DummyOracle');
 const StablePriceOracle = artifacts.require('./StablePriceOracle');
 var Promise = require('bluebird');
 
+const toBN = require('web3-utils').toBN;
+
 const DAYS = 24 * 60 * 60;
 
 async function expectFailure(call) {
@@ -25,7 +27,7 @@ contract('StablePriceOracle', function (accounts) {
 
     before(async () => {
         // Dummy oracle with 1 ETH == 10 USD
-        var dummyOracle = await DummyOracle.new(10000000000000000000);
+        var dummyOracle = await DummyOracle.new(toBN(10000000000000000000));
         // 4 attousd per second for 3 character names, 2 attousd per second for 4 character names,
         // 1 attousd per second for longer names.
         priceOracle = await StablePriceOracle.new(dummyOracle.address, [0, 0, 4, 2, 1]);
@@ -40,7 +42,7 @@ contract('StablePriceOracle', function (accounts) {
 
     it('should work with larger values', async () => {
         // 1 USD per second!
-        await priceOracle.setPrices([1000000000000000000]);
-        assert.equal((await priceOracle.price("foo", 0, 86400)).toNumber(), web3.toWei(8640, 'ether'));
+        await priceOracle.setPrices([toBN("1000000000000000000")]);
+        assert.equal((await priceOracle.price("foo", 0, 86400)).toString(), "8640000000000000000000");
     })
 });

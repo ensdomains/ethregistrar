@@ -1,6 +1,7 @@
-pragma solidity ^0.4.20;
+pragma solidity ^0.5.0;
 
 import "@ensdomains/ens/contracts/ENS.sol";
+import "@ensdomains/ens/contracts/Registrar.sol";
 import "@ensdomains/ens/contracts/HashRegistrar.sol";
 import "./BaseRegistrar.sol";
 
@@ -58,7 +59,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
         }
         // Available if we're past the transfer period, or the name isn't
         // registered in the legacy registrar.
-        return now > transferPeriodEnds || previousRegistrar.state(label) == HashRegistrar.Mode.Open;
+        return now > transferPeriodEnds || previousRegistrar.state(label) == Registrar.Mode.Open;
     }
 
     /**

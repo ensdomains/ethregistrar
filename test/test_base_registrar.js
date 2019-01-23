@@ -5,11 +5,15 @@ var Promise = require('bluebird');
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
+const toBN = require('web3-utils').toBN;
 
 const DAYS = 24 * 60 * 60;
 const SALT = sha3('foo');
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
 const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.sendAsync({
+	web3.currentProvider.send({
 		jsonrpc: "2.0",
 		"method": "evm_increaseTime",
 		params: [delay]}, done)
@@ -24,7 +28,7 @@ async function expectFailure(call) {
 		// Assert ganache revert exception
 		assert.equal(
 			error.message,
-			'VM Exception while processing transaction: revert'
+			'Returned error: VM Exception while processing transaction: revert'
 		);
 	}
 	if(tx !== undefined) {
@@ -44,7 +48,7 @@ contract('BaseRegistrar', function (accounts) {
 
 	async function registerOldNames(names, account) {
 		var hashes = names.map(sha3);
-		var value = web3.toWei(0.01, 'ether');
+		var value = toBN(10000000000000000);
 		var bidHashes = await Promise.map(hashes, (hash) => interimRegistrar.shaBid(hash, account, value, SALT));
 		await interimRegistrar.startAuctions(hashes);
 		await Promise.map(bidHashes, (h) => interimRegistrar.newBid(h, {value: value, from: account}));
@@ -101,7 +105,7 @@ contract('BaseRegistrar', function (accounts) {
 	it('should allow renewals', async () => {
 		var registration = await registrar.registrations(sha3("newname"));
 		await registrar.renew(sha3("newname"), 86400, {from: controllerAccount});
-		assert.equal((await registrar.registrations(sha3("newname")))[1].toNumber(), registration[1].add(86400).toNumber());
+		assert.equal((await registrar.registrations(sha3("newname")))[1].toNumber(), registration[1].add(toBN(86400)).toNumber());
 	});
 
 	it('should only allow the controller to register', async () => {
@@ -123,10 +127,10 @@ contract('BaseRegistrar', function (accounts) {
 	});
 
 	it('should permit the owner to reclaim a name', async () => {
-		await ens.setSubnodeOwner("0x0", sha3("eth"), accounts[0]);
-		await ens.setSubnodeOwner(namehash.hash("eth"), sha3("newname"), 0);
-		assert.equal(await ens.owner(namehash.hash("newname.eth")), "0x0000000000000000000000000000000000000000");
-		await ens.setSubnodeOwner("0x0", sha3("eth"), registrar.address);
+		await ens.setSubnodeOwner(ZERO_HASH, sha3("eth"), accounts[0]);
+		await ens.setSubnodeOwner(namehash.hash("eth"), sha3("newname"), ZERO_ADDRESS);
+		assert.equal(await ens.owner(namehash.hash("newname.eth")), ZERO_ADDRESS);
+		await ens.setSubnodeOwner(ZERO_HASH, sha3("eth"), registrar.address);
 		await registrar.reclaim(sha3("newname"), {from: registrantAccount});
 		assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
 	});
@@ -175,7 +179,7 @@ contract('BaseRegistrar', function (accounts) {
 	it('should show legacy names as available after the migration period', async () => {
 		var ts = (await web3.eth.getBlock('latest')).timestamp;
 		await advanceTime((await registrar.transferPeriodEnds()).toNumber() - ts + 3600);
-		assert.equal(await registrar.available('name2'), true);
+		assert.equal(await registrar.available(sha3('name2')), true);
 	});
 
 	it('should permit registration of legacy names after the migration period', async () => {

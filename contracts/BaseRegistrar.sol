@@ -1,4 +1,4 @@
-pragma solidity ^0.4.20;
+pragma solidity >=0.4.24;
 
 import "@ensdomains/ens/contracts/ENS.sol";
 import "@ensdomains/ens/contracts/HashRegistrar.sol";

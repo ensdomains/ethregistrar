@@ -7,7 +7,7 @@ library StringUtils {
      * @param s The string to measure the length of
      * @return The length of the input string
      */
-    function strlen(string s) internal pure returns (uint) {
+    function strlen(string memory s) internal pure returns (uint) {
         s; // Don't warn about unused variables
         // Starting here means the LSB will be the byte we care about
         uint ptr;
@@ -16,7 +16,8 @@ library StringUtils {
             ptr := add(s, 1)
             end := add(mload(s), ptr)
         }
-        for (uint len = 0; ptr < end; len++) {
+        uint len;
+        for (len = 0; ptr < end; len++) {
             uint8 b;
             assembly { b := and(mload(ptr), 0xFF) }
             if (b < 0x80) {
