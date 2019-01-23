@@ -12,7 +12,7 @@ The registrar is separated into several components for simplicity, modularity, a
 
 BaseRegistrar is the contract that owns the TLD in the ENS registry. This contract implements a minimal set of functionality:
 
- - The owner may add and remove controllers.
+ - The owner of the registrar may add and remove controllers.
  - Controllers may register new domains and extend the expiry of (renew) existing domains. They can not change the ownership or reduce the expiration time of existing domains.
  - Name owners may transfer ownership to another address.
  - Name owners may reclaim ownership in the ENS registry if they have lost it.
@@ -24,8 +24,8 @@ This separation of concerns provides name owners strong guarantees over continue
 
 EthRegistrarController is the first implementation of a registration controller for the new registrar. This contract implements the following functionality:
 
- - The owner may set a price oracle contract, which determines the cost of registrations and renewals based on the name and the desired registration or renewal duration.
- - The owner may withdraw any collected funds to their account.
+ - The owner of the registrar may set a price oracle contract, which determines the cost of registrations and renewals based on the name and the desired registration or renewal duration.
+ - The owner of the registrar may withdraw any collected funds to their account.
  - Users can register new names using a commit/reveal process and by paying the appropriate registration fee.
  - Users can renew a name by paying the appropriate fee. Any user may renew a domain, not just the name's owner.
 
@@ -38,4 +38,8 @@ The minimum delay and expiry for commitments exist to prevent miners or other us
 
 ### [SimplePriceOracle](https://github.com/ensdomains/ethregistrar/blob/master/contracts/SimplePriceOracle.sol)
 
-SimplePriceOracle is a trivial implementation of the pricing oracle for the EthRegistrarController that always returns a fixed price per domain per year, determined by the owner.
+SimplePriceOracle is a trivial implementation of the pricing oracle for the EthRegistrarController that always returns a fixed price per domain per year, determined by the contract owner.
+
+### [StablePriceOracle](https://github.com/ensdomains/ethregistrar/blob/master/contracts/StablePriceOracle.sol)
+
+StablePriceOracle is a price oracle implementation that allows the contract owner to specify pricing based on the length of a name, and uses a fiat currency oracle to set a fixed price in fiat per name.
