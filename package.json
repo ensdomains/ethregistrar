@@ -17,12 +17,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@ensdomains/ens": "^0.1.2",
+    "@ensdomains/ens": "^0.3.3",
     "bluebird": "^3.5.2",
     "eth-ens-namehash": "^2.0.8",
-    "openzeppelin-solidity": "1.11.0",
+    "openzeppelin-solidity": "^2.1.1",
     "solium": "^1.0.4",
-    "truffle": "^4.1.12",
+    "truffle": "^5.0.2",
     "web3-utils": "^1.0.0-beta.36"
   }
 }
