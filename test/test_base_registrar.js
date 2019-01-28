@@ -140,15 +140,15 @@ contract('BaseRegistrar', function (accounts) {
 	});
 
 	it('should permit the owner to transfer a registration', async () => {
-		await registrar.transfer(sha3("newname"), otherAccount, {from: registrantAccount});
+		await registrar.transferFrom(registrantAccount, otherAccount, sha3("newname"), {from: registrantAccount});
 		assert.equal((await registrar.registrations(sha3("newname")))[0], otherAccount);
 		// Transfer does not update ENS without a call to reclaim.
 		assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
-		await registrar.transfer(sha3("newname"), registrantAccount, {from: otherAccount});
+		await registrar.transferFrom(otherAccount, registrantAccount, sha3("newname"), {from: otherAccount});
 	});
 
 	it('should prohibit anyone else from transferring a registration', async () => {
-		await expectFailure(registrar.transfer(sha3("newname"), otherAccount, {from: otherAccount}));
+		await expectFailure(registrar.transferFrom(otherAccount, otherAccount, sha3("newname"), {from: otherAccount}));
 	});
 
 	it('should not permit transfer or reclaim during the grace period', async () => {
@@ -157,7 +157,7 @@ contract('BaseRegistrar', function (accounts) {
 		var registration = await registrar.registrations(sha3("newname"));
 		await advanceTime(registration[1].toNumber() - ts + 3600);
 
-		await expectFailure(registrar.transfer(sha3("newname"), otherAccount, {from: registrantAccount}));
+		await expectFailure(registrar.transferFrom(registrantAccount, otherAccount, sha3("newname"), {from: registrantAccount}));
 		await expectFailure(registrar.reclaim(sha3("newname"), {from: registrantAccount}));
 	});
 

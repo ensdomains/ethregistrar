@@ -30,8 +30,8 @@ contract ETHRegistrarController is Ownable {
     }
 
     function rentPrice(string memory name, uint duration) view public returns(uint) {
-        bytes32 hash = keccak256(bytes(name));
-        return prices.price(name, base.nameExpires(hash), duration);
+        uint256 label = uint256(keccak256(bytes(name)));
+        return prices.price(name, base.nameExpires(label), duration);
     }
 
     function valid(string memory name) public view returns(bool) {
@@ -39,7 +39,7 @@ contract ETHRegistrarController is Ownable {
     }
 
     function available(string memory name) public view returns(bool) {
-        bytes32 label = keccak256(bytes(name));
+        uint256 label = uint256(keccak256(bytes(name)));
         return valid(name) && base.available(label);
     }
 
@@ -69,7 +69,7 @@ contract ETHRegistrarController is Ownable {
         require(duration >= MIN_REGISTRATION_DURATION);
         require(msg.value >= cost);
 
-        bytes32 label = keccak256(bytes(name));
+        uint256 label = uint256(keccak256(bytes(name)));
         uint expires = base.register(label, owner, duration);
         emit NameRegistered(name, owner, cost, expires);
 
@@ -82,7 +82,7 @@ contract ETHRegistrarController is Ownable {
         uint cost = rentPrice(name, duration);
         require(msg.value >= cost);
 
-        bytes32 label = keccak256(bytes(name));
+        uint256 label = uint256(keccak256(bytes(name)));
         uint expires = base.renew(label, duration);
 
         if(msg.value > cost) {
