@@ -125,11 +125,11 @@ contract('ETHRegistrarController', function (accounts) {
 		});
 
 		it('should allow anyone to renew a name', async () => {
-			var registration = await baseRegistrar.registrations(sha3("name"));
+			var expires = await baseRegistrar.nameExpires(sha3("newname"));
 			var balanceBefore = await web3.eth.getBalance(controller.address);
-			await controller.renew("name", 86400, {value: 86400 + 1});
-			var newRegistration = await baseRegistrar.registrations(sha3("name"));
-			assert.equal(newRegistration[1] - registration[1], 86400);
+			await controller.renew("newname", 86400, {value: 86400 + 1});
+			var newExpires = await baseRegistrar.nameExpires(sha3("newname"));
+			assert.equal(newExpires.toNumber() - expires.toNumber(), 86400);
 			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 86400);
 		});
 

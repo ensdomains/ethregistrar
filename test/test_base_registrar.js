@@ -80,32 +80,33 @@ contract('BaseRegistrar', function (accounts) {
 
 	it('should prohibit registration of legacy names during the migration period', async () => {
 		await expectFailure(registrar.register(sha3("name2"), registrantAccount, 86400, {from: controllerAccount}));
-		var registration = await registrar.registrations(sha3("name2"));
-		assert.equal(registration[0], "0x0000000000000000000000000000000000000000");
-		assert.equal(registration[1].toNumber(), 0);
+		await expectFailure(registrar.ownerOf(sha3("name2")));
+		assert.equal((await registrar.nameExpires(sha3("name2"))).toNumber(), 0);
+	});
+
+	it('should prohibit renewals of un-migrated names', async () => {
+		await expectFailure(registrar.renew(sha3("name"), 86400, {from: controllerAccount}));
 	});
 
 	it('should allow transfers from the old registrar', async () => {
 		var balanceBefore = await web3.eth.getBalance(registrantAccount);
-		var receipt = await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
-		var registration = await registrar.registrations(sha3('name'));
-		assert.equal(registration[0], registrantAccount);
-		assert.equal(registration[1], (await registrar.transferPeriodEnds()).toNumber());
+		await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
+		assert.equal(await registrar.ownerOf(sha3("name")), registrantAccount);
+		assert.equal((await (registrar.nameExpires(sha3("name")))).toNumber(), (await registrar.transferPeriodEnds()).toNumber());
 	});
 
 	it('should allow new registrations', async () => {
 		var tx = await registrar.register(sha3("newname"), registrantAccount, 86400, {from: controllerAccount});
 		var block = await web3.eth.getBlock(tx.receipt.blockHash);
 		assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
-		var registration = await registrar.registrations(sha3("newname"));
-		assert.equal(registration[0], registrantAccount);
-		assert.equal(registration[1].toNumber(), block.timestamp + 86400);
+		assert.equal(await registrar.ownerOf(sha3("newname")), registrantAccount);
+		assert.equal((await registrar.nameExpires(sha3("newname"))).toNumber(), block.timestamp + 86400);
 	});
 
 	it('should allow renewals', async () => {
-		var registration = await registrar.registrations(sha3("newname"));
+		var oldExpires = await registrar.nameExpires(sha3("newname"));
 		await registrar.renew(sha3("newname"), 86400, {from: controllerAccount});
-		assert.equal((await registrar.registrations(sha3("newname")))[1].toNumber(), registration[1].add(toBN(86400)).toNumber());
+		assert.equal((await registrar.nameExpires(sha3("newname"))).toNumber(), oldExpires.add(toBN(86400)).toNumber());
 	});
 
 	it('should only allow the controller to register', async () => {
@@ -118,8 +119,7 @@ contract('BaseRegistrar', function (accounts) {
 
 	it('should not permit registration of already registered names', async () => {
 		await expectFailure(registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount}));
-		var registration = await registrar.registrations(sha3("newname"));
-		assert.equal(registration[0], registrantAccount);
+		assert.equal(await registrar.ownerOf(sha3("newname")), registrantAccount);
 	});
 
 	it('should not permit renewing a name that is not registered', async () => {
@@ -140,24 +140,23 @@ contract('BaseRegistrar', function (accounts) {
 	});
 
 	it('should permit the owner to transfer a registration', async () => {
-		await registrar.transfer(sha3("newname"), otherAccount, {from: registrantAccount});
-		assert.equal((await registrar.registrations(sha3("newname")))[0], otherAccount);
+		await registrar.transferFrom(registrantAccount, otherAccount, sha3("newname"), {from: registrantAccount});
+		assert.equal((await registrar.ownerOf(sha3("newname"))), otherAccount);
 		// Transfer does not update ENS without a call to reclaim.
 		assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
-		await registrar.transfer(sha3("newname"), registrantAccount, {from: otherAccount});
+		await registrar.transferFrom(otherAccount, registrantAccount, sha3("newname"), {from: otherAccount});
 	});
 
 	it('should prohibit anyone else from transferring a registration', async () => {
-		await expectFailure(registrar.transfer(sha3("newname"), otherAccount, {from: otherAccount}));
+		await expectFailure(registrar.transferFrom(otherAccount, otherAccount, sha3("newname"), {from: otherAccount}));
 	});
 
 	it('should not permit transfer or reclaim during the grace period', async () => {
 		// Advance to the grace period
 		var ts = (await web3.eth.getBlock('latest')).timestamp;
-		var registration = await registrar.registrations(sha3("newname"));
-		await advanceTime(registration[1].toNumber() - ts + 3600);
+		await advanceTime((await registrar.nameExpires(sha3("newname"))).toNumber() - ts + 3600);
 
-		await expectFailure(registrar.transfer(sha3("newname"), otherAccount, {from: registrantAccount}));
+		await expectFailure(registrar.transferFrom(registrantAccount, otherAccount, sha3("newname"), {from: registrantAccount}));
 		await expectFailure(registrar.reclaim(sha3("newname"), {from: registrantAccount}));
 	});
 
@@ -167,11 +166,12 @@ contract('BaseRegistrar', function (accounts) {
 
 	it('should allow registration of an expired domain', async () => {
 		var ts = (await web3.eth.getBlock('latest')).timestamp;
-		var registration = await registrar.registrations(sha3("newname"));
-		var grace = (await registrar.GRACE_PERIOD()).toNumber();
-		await advanceTime(registration[1].toNumber() - ts + grace + 3600);
+		var expires = await registrar.nameExpires(sha3("newname"));
+		var grace = await registrar.GRACE_PERIOD();
+		await advanceTime(expires.toNumber() - ts + grace.toNumber() + 3600);
+		expectFailure(registrar.ownerOf(sha3("newname"))); // ownerOf reverts for nonexistent names
 		await registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount});
-		assert.equal((await registrar.registrations(sha3("newname")))[0], otherAccount);
+		assert.equal(await registrar.ownerOf(sha3("newname")), otherAccount);
 	});
 
 	// END OF MIGRATION PERIOD
