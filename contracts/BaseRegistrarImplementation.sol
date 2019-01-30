@@ -6,6 +6,9 @@ import "@ensdomains/ens/contracts/HashRegistrar.sol";
 import "./BaseRegistrar.sol";
 
 contract BaseRegistrarImplementation is BaseRegistrar {
+    // A map of expiry times
+    mapping(uint256=>uint) expiries;
+
     constructor(ENS _ens, bytes32 _baseNode, uint _transferPeriodEnds) public {
         ens = _ens;
         baseNode = _baseNode;

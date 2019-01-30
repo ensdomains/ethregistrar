@@ -29,9 +29,6 @@ contract BaseRegistrar is ERC721, Ownable {
     // A map of addresses that are authorised to register and renew names.
     mapping(address=>bool) public controllers;
 
-    // A map of expiry times
-    mapping(uint256=>uint) public expiries;
-
     // Authorises a controller, who can register and renew domains.
     function addController(address controller) external;
 
