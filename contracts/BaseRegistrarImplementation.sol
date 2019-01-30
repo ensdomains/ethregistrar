@@ -113,6 +113,10 @@ contract BaseRegistrarImplementation is BaseRegistrar {
         require(expiries[id] == 0);
         require(transferPeriodEnds > now);
 
+        uint registrationDate;
+        (,,registrationDate,,) = previousRegistrar.entries(label);
+        require(registrationDate < now - 183 days);
+
         address owner = deed.owner();
 
         // Destroy the deed and transfer the funds back to the registrant.

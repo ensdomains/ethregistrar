@@ -88,7 +88,13 @@ contract('BaseRegistrar', function (accounts) {
 		await expectFailure(registrar.renew(sha3("name"), 86400, {from: controllerAccount}));
 	});
 
+	it('should not allow transfers until the name is 183 days old', async () => {
+		await expectFailure(interimRegistrar.transferRegistrars(sha3('name'), {from: registrantAccount}));
+	});
+
 	it('should allow transfers from the old registrar', async () => {
+		await advanceTime(183 * DAYS);
+
 		var balanceBefore = await web3.eth.getBalance(registrantAccount);
 		await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
 		assert.equal(await registrar.ownerOf(sha3("name")), registrantAccount);
