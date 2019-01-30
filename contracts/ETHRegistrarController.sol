@@ -31,7 +31,7 @@ contract ETHRegistrarController is Ownable {
 
     function rentPrice(string memory name, uint duration) view public returns(uint) {
         bytes32 hash = keccak256(bytes(name));
-        return prices.price(name, base.nameExpires(hash), duration);
+        return prices.price(name, base.nameExpires(uint256(hash)), duration);
     }
 
     function valid(string memory name) public view returns(bool) {
@@ -40,7 +40,7 @@ contract ETHRegistrarController is Ownable {
 
     function available(string memory name) public view returns(bool) {
         bytes32 label = keccak256(bytes(name));
-        return valid(name) && base.available(label);
+        return valid(name) && base.available(uint256(label));
     }
 
     function makeCommitment(string memory name, bytes32 secret) pure public returns(bytes32) {
@@ -70,7 +70,7 @@ contract ETHRegistrarController is Ownable {
         require(msg.value >= cost);
 
         bytes32 label = keccak256(bytes(name));
-        uint expires = base.register(label, owner, duration);
+        uint expires = base.register(uint256(label), owner, duration);
         emit NameRegistered(name, owner, cost, expires);
 
         if(msg.value > cost) {
@@ -83,7 +83,7 @@ contract ETHRegistrarController is Ownable {
         require(msg.value >= cost);
 
         bytes32 label = keccak256(bytes(name));
-        uint expires = base.renew(label, duration);
+        uint expires = base.renew(uint256(label), duration);
 
         if(msg.value > cost) {
             msg.sender.transfer(msg.value - cost);
