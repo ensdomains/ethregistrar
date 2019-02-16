@@ -6,22 +6,6 @@ const toBN = require('web3-utils').toBN;
 
 const DAYS = 24 * 60 * 60;
 
-async function expectFailure(call) {
-    let tx;
-    try {
-        tx = await call;
-    } catch (error) {
-        // Assert ganache revert exception
-        assert.equal(
-            error.message,
-            'VM Exception while processing transaction: revert'
-        );
-    }
-    if(tx !== undefined) {
-        assert.equal(parseInt(tx.receipt.status), 0);
-    }
-}
-
 contract('StablePriceOracle', function (accounts) {
     let priceOracle;
 

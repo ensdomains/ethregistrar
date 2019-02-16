@@ -6,19 +6,12 @@ var Promise = require('bluebird');
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
 const toBN = require('web3-utils').toBN;
+const { evm } = require("@ensdomains/test-utils");
 
 const DAYS = 24 * 60 * 60;
 const SALT = sha3('foo');
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.send({
-		jsonrpc: "2.0",
-		"method": "evm_increaseTime",
-		params: [delay]}, done)
-	}
-);
 
 async function expectFailure(call) {
 	let tx;
@@ -52,9 +45,9 @@ contract('BaseRegistrar', function (accounts) {
 		var bidHashes = await Promise.map(hashes, (hash) => interimRegistrar.shaBid(hash, account, value, SALT));
 		await interimRegistrar.startAuctions(hashes);
 		await Promise.map(bidHashes, (h) => interimRegistrar.newBid(h, {value: value, from: account}));
-		await advanceTime(3 * DAYS + 1);
+		await evm.advanceTime(3 * DAYS + 1);
 		await Promise.map(hashes, (hash) => interimRegistrar.unsealBid(hash, value, SALT, {from: account}));
-		await advanceTime(2 * DAYS + 1);
+		await evm.advanceTime(2 * DAYS + 1);
 		await Promise.map(hashes, (hash) => interimRegistrar.finalizeAuction(hash, {from: account}));
 		for(var name of names) {
 			assert.equal(await ens.owner(namehash.hash(name + '.eth')), account);
@@ -93,7 +86,7 @@ contract('BaseRegistrar', function (accounts) {
 	});
 
 	it('should allow transfers from the old registrar', async () => {
-		await advanceTime(183 * DAYS);
+		await evm.advanceTime(183 * DAYS);
 
 		var balanceBefore = await web3.eth.getBalance(registrantAccount);
 		await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
@@ -160,7 +153,7 @@ contract('BaseRegistrar', function (accounts) {
 	it('should not permit transfer or reclaim during the grace period', async () => {
 		// Advance to the grace period
 		var ts = (await web3.eth.getBlock('latest')).timestamp;
-		await advanceTime((await registrar.nameExpires(sha3("newname"))).toNumber() - ts + 3600);
+		await evm.advanceTime((await registrar.nameExpires(sha3("newname"))).toNumber() - ts + 3600);
 
 		await expectFailure(registrar.transferFrom(registrantAccount, otherAccount, sha3("newname"), {from: registrantAccount}));
 		await expectFailure(registrar.reclaim(sha3("newname"), {from: registrantAccount}));
@@ -174,7 +167,7 @@ contract('BaseRegistrar', function (accounts) {
 		var ts = (await web3.eth.getBlock('latest')).timestamp;
 		var expires = await registrar.nameExpires(sha3("newname"));
 		var grace = await registrar.GRACE_PERIOD();
-		await advanceTime(expires.toNumber() - ts + grace.toNumber() + 3600);
+		await evm.advanceTime(expires.toNumber() - ts + grace.toNumber() + 3600);
 		expectFailure(registrar.ownerOf(sha3("newname"))); // ownerOf reverts for nonexistent names
 		await registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount});
 		assert.equal(await registrar.ownerOf(sha3("newname")), otherAccount);
@@ -184,7 +177,7 @@ contract('BaseRegistrar', function (accounts) {
 
 	it('should show legacy names as available after the migration period', async () => {
 		var ts = (await web3.eth.getBlock('latest')).timestamp;
-		await advanceTime((await registrar.transferPeriodEnds()).toNumber() - ts + 3600);
+		await evm.advanceTime((await registrar.transferPeriodEnds()).toNumber() - ts + 3600);
 		assert.equal(await registrar.available(sha3('name2')), true);
 	});
 

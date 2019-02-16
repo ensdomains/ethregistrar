@@ -8,17 +8,10 @@ var Promise = require('bluebird');
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
 const toBN = require('web3-utils').toBN;
+const { evm } = require("@ensdomains/test-utils");
 
 const DAYS = 24 * 60 * 60;
 const SALT = sha3('foo');
-
-const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.send({
-		jsonrpc: "2.0",
-		"method": "evm_increaseTime",
-		params: [delay]}, done)
-	}
-);
 
 async function expectFailure(call) {
 	let tx;
@@ -53,9 +46,9 @@ contract('ETHRegistrarController', function (accounts) {
 		var bidHashes = await Promise.map(hashes, (hash) => interimRegistrar.shaBid(hash, accounts[0], value, SALT));
 		await interimRegistrar.startAuctions(hashes);
 		await Promise.map(bidHashes, (h) => interimRegistrar.newBid(h, {value: value}));
-		await advanceTime(3 * DAYS + 1);
+		await evm.advanceTime(3 * DAYS + 1);
 		await Promise.map(hashes, (hash) => interimRegistrar.unsealBid(hash, value, SALT));
-		await advanceTime(2 * DAYS + 1);
+		await evm.advanceTime(2 * DAYS + 1);
 		await Promise.map(hashes, (hash) => interimRegistrar.finalizeAuction(hash));
 		for(var name of names) {
 			assert.equal(await ens.owner(namehash.hash(name + '.eth')), accounts[0]);
@@ -94,7 +87,7 @@ contract('ETHRegistrarController', function (accounts) {
 			var tx = await controller.commit(commitment);
 			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
 
-			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+			await evm.advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			var tx = await controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS + 1, gasPrice: 0});
 			assert.equal(tx.logs.length, 1);
@@ -107,7 +100,7 @@ contract('ETHRegistrarController', function (accounts) {
 		it('should return funds for duplicate registrations', async () => {
 			await controller.commit(await controller.makeCommitment("newname", secret));
 
-			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+			await evm.advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			var tx = await controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
 			assert.equal(tx.logs.length, 0);
@@ -117,7 +110,7 @@ contract('ETHRegistrarController', function (accounts) {
 		it('should return funds for expired commitments', async () => {
 			await controller.commit(await controller.makeCommitment("newname2", secret));
 
-			await advanceTime((await controller.MAX_COMMITMENT_AGE()).toNumber() + 1);
+			await evm.advanceTime((await controller.MAX_COMMITMENT_AGE()).toNumber() + 1);
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			var tx = await controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
 			assert.equal(tx.logs.length, 0);

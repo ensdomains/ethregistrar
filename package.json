@@ -23,6 +23,7 @@
     "openzeppelin-solidity": "^2.1.1",
     "solium": "^1.0.4",
     "truffle": "^5.0.2",
-    "web3-utils": "^1.0.0-beta.36"
+    "web3-utils": "^1.0.0-beta.36",
+    "@ensdomains/test-utils": "^1.0.3"
   }
 }
