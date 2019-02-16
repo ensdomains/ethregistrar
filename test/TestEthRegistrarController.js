@@ -8,26 +8,10 @@ var Promise = require('bluebird');
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
 const toBN = require('web3-utils').toBN;
-const { evm } = require("@ensdomains/test-utils");
+const { evm, exception } = require("@ensdomains/test-utils");
 
 const DAYS = 24 * 60 * 60;
 const SALT = sha3('foo');
-
-async function expectFailure(call) {
-	let tx;
-	try {
-		tx = await call;
-	} catch (error) {
-		// Assert ganache revert exception
-		assert.equal(
-			error.message,
-			'Returned error: VM Exception while processing transaction: revert'
-		);
-	}
-	if(tx !== undefined) {
-		assert.equal(parseInt(tx.receipt.status), 0);
-	}
-}
 
 contract('ETHRegistrarController', function (accounts) {
 	let ens;
@@ -127,7 +111,13 @@ contract('ETHRegistrarController', function (accounts) {
 		});
 
 		it('should require sufficient value for a renewal', async () => {
-			await expectFailure(controller.renew("name", 86400));
+		    try {
+                await controller.renew("name", 86400);
+		    } catch (error) {
+		        return exception.ensureException(error);
+		    }
+
+		    assert.fail("did not fail");
 		});
 
 		it('should allow the registrar owner to withdraw funds', async () => {
