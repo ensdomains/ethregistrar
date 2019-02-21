@@ -20,8 +20,8 @@ contract ETHRegistrarController is Ownable {
 
     mapping(bytes32=>uint) public commitments;
 
-    event NameRegistered(string name, address indexed owner, uint cost, uint expires);
-    event NameRenewed(string name, uint cost, uint expires);
+    event NameRegistered(string name, bytes32 indexed label, address indexed owner, uint cost, uint expires);
+    event NameRenewed(string name, bytes32 indexed label, uint cost, uint expires);
     event NewPriceOracle(address indexed oracle);
 
     constructor(BaseRegistrar _base, PriceOracle _prices) public {
@@ -71,7 +71,7 @@ contract ETHRegistrarController is Ownable {
 
         bytes32 label = keccak256(bytes(name));
         uint expires = base.register(uint256(label), owner, duration);
-        emit NameRegistered(name, owner, cost, expires);
+        emit NameRegistered(name, label, owner, cost, expires);
 
         if(msg.value > cost) {
             msg.sender.transfer(msg.value - cost);
@@ -89,7 +89,7 @@ contract ETHRegistrarController is Ownable {
             msg.sender.transfer(msg.value - cost);
         }
 
-        emit NameRenewed(name, cost, expires);
+        emit NameRenewed(name, label, cost, expires);
     }
 
     function setPriceOracle(PriceOracle _prices) public onlyOwner {
