@@ -9,19 +9,19 @@ contract BaseRegistrarImplementation is BaseRegistrar {
     // A map of expiry times
     mapping(uint256=>uint) expiries;
 
-    bytes4 constant INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
-    bytes4 constant ERC721_ID = bytes4(
-        keccak256("balanceOf(uint256)") |
-        keccak256("ownerOf(uint256)") |
-        keccak256("approve(address,uint256)") |
-        keccak256("getApproved(uint256)") |
-        keccak256("setApprovalForAll(address,bool)") |
-        keccak256("isApprovedForAll(address,address)") |
-        keccak256("transferFrom(address,address,uint256)") |
-        keccak256("safeTransferFrom(address,address,uint256)") |
+    bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
+    bytes4 constant private ERC721_ID = bytes4(
+        keccak256("balanceOf(uint256)") ^
+        keccak256("ownerOf(uint256)") ^
+        keccak256("approve(address,uint256)") ^
+        keccak256("getApproved(uint256)") ^
+        keccak256("setApprovalForAll(address,bool)") ^
+        keccak256("isApprovedForAll(address,address)") ^
+        keccak256("transferFrom(address,address,uint256)") ^
+        keccak256("safeTransferFrom(address,address,uint256)") ^
         keccak256("safeTransferFrom(address,address,uint256,bytes)")
     );
-    bytes4 constant RECLAIM_ID = bytes4(keccak256("reclaim(uint256)"));
+    bytes4 constant private RECLAIM_ID = bytes4(keccak256("reclaim(uint256)"));
 
     constructor(ENS _ens, bytes32 _baseNode, uint _transferPeriodEnds) public {
         ens = _ens;

@@ -15,13 +15,13 @@ contract ETHRegistrarController is Ownable {
     uint constant public MAX_COMMITMENT_AGE = 48 hours;
     uint constant public MIN_REGISTRATION_DURATION = 28 days;
 
-    bytes4 constant INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
-    bytes4 constant COMMITMENT_CONTROLLER_ID = bytes4(
-        keccak256("rentPrice(string,uint256)") |
-        keccak256("available(string)") |
-        keccak256("makeCommitment(string,bytes32)") |
-        keccak256("commit(bytes32)") |
-        keccak256("register(string,address,uint256,bytes32)") |
+    bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
+    bytes4 constant private COMMITMENT_CONTROLLER_ID = bytes4(
+        keccak256("rentPrice(string,uint256)") ^
+        keccak256("available(string)") ^
+        keccak256("makeCommitment(string,bytes32)") ^
+        keccak256("commit(bytes32)") ^
+        keccak256("register(string,address,uint256,bytes32)") ^
         keccak256("renew(string,uint256)")
     );
 
