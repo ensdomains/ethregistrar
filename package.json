@@ -1,6 +1,6 @@
 {
   "name": "@ensdomains/ethregistrar",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "",
   "main": "truffle-config.js",
   "directories": {
@@ -22,7 +22,7 @@
     "eth-ens-namehash": "^2.0.8",
     "openzeppelin-solidity": "^2.1.1",
     "solium": "^1.0.4",
-    "truffle": "^5.0.2",
+    "truffle": "^5.0.5",
     "web3-utils": "^1.0.0-beta.36"
   }
 }
