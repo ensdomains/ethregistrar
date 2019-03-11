@@ -146,7 +146,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
         emit NameRegistered(id, owner, transferPeriodEnds);
     }
 
-    function supportsInterface(bytes4 interfaceID) external pure returns (bool) {
+    function supportsInterface(bytes4 interfaceID) external view returns (bool) {
         return interfaceID == INTERFACE_META_ID ||
                interfaceID == ERC721_ID ||
                interfaceID == RECLAIM_ID;
