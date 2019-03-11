@@ -120,7 +120,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
      * @dev Transfers a registration from the initial registrar.
      * This function is called by the initial registrar when a user calls `transferRegistrars`.
      */
-    function acceptRegistrarTransfer(bytes32 label, Deed deed, uint) external {
+    function acceptRegistrarTransfer(bytes32 label, Deed deed, uint) external live {
         uint256 id = uint256(label);
 
         require(msg.sender == address(previousRegistrar));
