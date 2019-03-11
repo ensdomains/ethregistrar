@@ -90,7 +90,7 @@ contract('ETHRegistrarController', function (accounts) {
 		});
 
 		it('should permit new registrations', async () => {
-			var commitment = await controller.makeCommitment("newname", secret);
+			var commitment = await controller.makeCommitment("newname", registrantAccount, secret);
 			var tx = await controller.commit(commitment);
 			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
 
@@ -104,8 +104,18 @@ contract('ETHRegistrarController', function (accounts) {
 			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 28 * DAYS);
 		});
 
+		it('should include the owner in the commitment', async () => {
+			await controller.commit(await controller.makeCommitment("newname2", accounts[2], secret));
+
+			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+			var balanceBefore = await web3.eth.getBalance(controller.address);
+			var tx = await controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
+			assert.equal(tx.logs.length, 0);
+			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 0);
+		});
+
 		it('should return funds for duplicate registrations', async () => {
-			await controller.commit(await controller.makeCommitment("newname", secret));
+			await controller.commit(await controller.makeCommitment("newname", registrantAccount, secret));
 
 			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
@@ -115,7 +125,7 @@ contract('ETHRegistrarController', function (accounts) {
 		});
 
 		it('should return funds for expired commitments', async () => {
-			await controller.commit(await controller.makeCommitment("newname2", secret));
+			await controller.commit(await controller.makeCommitment("newname2", registrantAccount, secret));
 
 			await advanceTime((await controller.MAX_COMMITMENT_AGE()).toNumber() + 1);
 			var balanceBefore = await web3.eth.getBalance(controller.address);
