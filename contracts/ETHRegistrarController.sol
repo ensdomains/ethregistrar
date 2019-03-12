@@ -69,10 +69,9 @@ contract ETHRegistrarController is Ownable {
         require(commitments[commitment] + MIN_COMMITMENT_AGE <= now);
 
         // If the commitment is too old, or the name is registered, stop
-        if(commitments[commitment] + MAX_COMMITMENT_AGE < now || !available(name))  {
-            msg.sender.transfer(msg.value);
-            return;
-        }
+        require(commitments[commitment] + MAX_COMMITMENT_AGE > now);
+        require(available(name));
+
         delete(commitments[commitment]);
 
         uint cost = rentPrice(name, duration);

@@ -109,29 +109,23 @@ contract('ETHRegistrarController', function (accounts) {
 
 			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
-			var tx = await controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
-			assert.equal(tx.logs.length, 0);
-			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 0);
+			await expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
 
-		it('should return funds for duplicate registrations', async () => {
+		it('should reject duplicate registrations', async () => {
 			await controller.commit(await controller.makeCommitment("newname", registrantAccount, secret));
 
 			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
-			var tx = await controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
-			assert.equal(tx.logs.length, 0);
-			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 0);
+			await expectFailure(controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
 
-		it('should return funds for expired commitments', async () => {
+		it('should reject for expired commitments', async () => {
 			await controller.commit(await controller.makeCommitment("newname2", registrantAccount, secret));
 
 			await advanceTime((await controller.MAX_COMMITMENT_AGE()).toNumber() + 1);
 			var balanceBefore = await web3.eth.getBalance(controller.address);
-			var tx = await controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0});
-			assert.equal(tx.logs.length, 0);
-			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 0);
+			await expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
 
 		it('should allow anyone to renew a name', async () => {
