@@ -19,7 +19,7 @@ contract ETHRegistrarController is Ownable {
     bytes4 constant private COMMITMENT_CONTROLLER_ID = bytes4(
         keccak256("rentPrice(string,uint256)") ^
         keccak256("available(string)") ^
-        keccak256("makeCommitment(string,bytes32)") ^
+        keccak256("makeCommitment(string,address,bytes32)") ^
         keccak256("commit(bytes32)") ^
         keccak256("register(string,address,uint256,bytes32)") ^
         keccak256("renew(string,uint256)")
@@ -53,9 +53,9 @@ contract ETHRegistrarController is Ownable {
         return valid(name) && base.available(uint256(label));
     }
 
-    function makeCommitment(string memory name, bytes32 secret) pure public returns(bytes32) {
+    function makeCommitment(string memory name, address owner, bytes32 secret) pure public returns(bytes32) {
         bytes32 label = keccak256(bytes(name));
-        return keccak256(abi.encodePacked(label, secret));
+        return keccak256(abi.encodePacked(label, owner, secret));
     }
 
     function commit(bytes32 commitment) public {
@@ -65,7 +65,7 @@ contract ETHRegistrarController is Ownable {
 
     function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
         // Require a valid commitment
-        bytes32 commitment = makeCommitment(name, secret);
+        bytes32 commitment = makeCommitment(name, owner, secret);
         require(commitments[commitment] + MIN_COMMITMENT_AGE <= now);
 
         // If the commitment is too old, or the name is registered, stop
