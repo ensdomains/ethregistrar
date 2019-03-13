@@ -77,6 +77,8 @@ contract('ETHRegistrarController', function (accounts) {
 		controller = await ETHRegistrarController.new(
 			baseRegistrar.address,
 			priceOracle.address,
+			600,
+			86400,
 			{from: ownerAccount});
 			await baseRegistrar.addController(controller.address, {from: ownerAccount});
 		});
@@ -94,7 +96,7 @@ contract('ETHRegistrarController', function (accounts) {
 			var tx = await controller.commit(commitment);
 			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
 
-			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+			await advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			var tx = await controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS + 1, gasPrice: 0});
 			assert.equal(tx.logs.length, 1);
@@ -107,7 +109,7 @@ contract('ETHRegistrarController', function (accounts) {
 		it('should include the owner in the commitment', async () => {
 			await controller.commit(await controller.makeCommitment("newname2", accounts[2], secret));
 
-			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+			await advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			await expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
@@ -115,7 +117,7 @@ contract('ETHRegistrarController', function (accounts) {
 		it('should reject duplicate registrations', async () => {
 			await controller.commit(await controller.makeCommitment("newname", registrantAccount, secret));
 
-			await advanceTime((await controller.MIN_COMMITMENT_AGE()).toNumber());
+			await advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			await expectFailure(controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
@@ -123,7 +125,7 @@ contract('ETHRegistrarController', function (accounts) {
 		it('should reject for expired commitments', async () => {
 			await controller.commit(await controller.makeCommitment("newname2", registrantAccount, secret));
 
-			await advanceTime((await controller.MAX_COMMITMENT_AGE()).toNumber() + 1);
+			await advanceTime((await controller.maxCommitmentAge()).toNumber() + 1);
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			await expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});

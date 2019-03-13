@@ -25,8 +25,8 @@ contract ETHRegistrarController is Ownable {
 
     BaseRegistrar base;
     PriceOracle prices;
-    uint constant public minCommitmentAge;
-    uint constant public maxCommitmentAge;
+    uint public minCommitmentAge;
+    uint public maxCommitmentAge;
 
     mapping(bytes32=>uint) public commitments;
 
@@ -35,7 +35,7 @@ contract ETHRegistrarController is Ownable {
     event NewPriceOracle(address indexed oracle);
 
     constructor(BaseRegistrar _base, PriceOracle _prices, uint _minCommitmentAge, uint _maxCommitmentAge) public {
-        require(maxCommitmentAge > minCommitmentAge);
+        require(_maxCommitmentAge > _minCommitmentAge);
 
         base = _base;
         prices = _prices;
