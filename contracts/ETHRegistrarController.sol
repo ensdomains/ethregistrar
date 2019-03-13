@@ -11,8 +11,6 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 contract ETHRegistrarController is Ownable {
     using StringUtils for *;
 
-    uint constant public MIN_COMMITMENT_AGE = 10 minutes;
-    uint constant public MAX_COMMITMENT_AGE = 24 hours;
     uint constant public MIN_REGISTRATION_DURATION = 28 days;
 
     bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
@@ -27,6 +25,8 @@ contract ETHRegistrarController is Ownable {
 
     BaseRegistrar base;
     PriceOracle prices;
+    uint constant public minCommitmentAge;
+    uint constant public maxCommitmentAge;
 
     mapping(bytes32=>uint) public commitments;
 
@@ -34,9 +34,13 @@ contract ETHRegistrarController is Ownable {
     event NameRenewed(string name, bytes32 indexed label, uint cost, uint expires);
     event NewPriceOracle(address indexed oracle);
 
-    constructor(BaseRegistrar _base, PriceOracle _prices) public {
+    constructor(BaseRegistrar _base, PriceOracle _prices, uint _minCommitmentAge, uint _maxCommitmentAge) public {
+        require(maxCommitmentAge > minCommitmentAge);
+
         base = _base;
         prices = _prices;
+        minCommitmentAge = _minCommitmentAge;
+        maxCommitmentAge = _maxCommitmentAge;
     }
 
     function rentPrice(string memory name, uint duration) view public returns(uint) {
@@ -59,17 +63,17 @@ contract ETHRegistrarController is Ownable {
     }
 
     function commit(bytes32 commitment) public {
-        require(commitments[commitment] + MAX_COMMITMENT_AGE < now);
+        require(commitments[commitment] + maxCommitmentAge < now);
         commitments[commitment] = now;
     }
 
     function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
         // Require a valid commitment
         bytes32 commitment = makeCommitment(name, owner, secret);
-        require(commitments[commitment] + MIN_COMMITMENT_AGE <= now);
+        require(commitments[commitment] + minCommitmentAge <= now);
 
         // If the commitment is too old, or the name is registered, stop
-        require(commitments[commitment] + MAX_COMMITMENT_AGE > now);
+        require(commitments[commitment] + maxCommitmentAge > now);
         require(available(name));
 
         delete(commitments[commitment]);
