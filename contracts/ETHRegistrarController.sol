@@ -11,8 +11,8 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 contract ETHRegistrarController is Ownable {
     using StringUtils for *;
 
-    uint constant public MIN_COMMITMENT_AGE = 1 hours;
-    uint constant public MAX_COMMITMENT_AGE = 48 hours;
+    uint constant public MIN_COMMITMENT_AGE = 10 minutes;
+    uint constant public MAX_COMMITMENT_AGE = 24 hours;
     uint constant public MIN_REGISTRATION_DURATION = 28 days;
 
     bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
