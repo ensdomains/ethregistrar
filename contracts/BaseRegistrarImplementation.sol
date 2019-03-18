@@ -9,6 +9,8 @@ contract BaseRegistrarImplementation is BaseRegistrar {
     // A map of expiry times
     mapping(uint256=>uint) expiries;
 
+    uint constant public MIGRATION_LOCK_PERIOD = 28 days;
+
     bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
     bytes4 constant private ERC721_ID = bytes4(
         keccak256("balanceOf(uint256)") ^
@@ -24,6 +26,9 @@ contract BaseRegistrarImplementation is BaseRegistrar {
     bytes4 constant private RECLAIM_ID = bytes4(keccak256("reclaim(uint256)"));
 
     constructor(ENS _ens, bytes32 _baseNode, uint _transferPeriodEnds) public {
+        // Require that people have time to transfer names over. 
+        require(_transferPeriodEnds > now + 2 * MIGRATION_LOCK_PERIOD);
+
         ens = _ens;
         baseNode = _baseNode;
         previousRegistrar = HashRegistrar(ens.owner(baseNode));
@@ -129,7 +134,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
 
         uint registrationDate;
         (,,registrationDate,,) = previousRegistrar.entries(label);
-        require(registrationDate < now - 183 days);
+        require(registrationDate < now - MIGRATION_LOCK_PERIOD);
 
         address owner = deed.owner();
 
