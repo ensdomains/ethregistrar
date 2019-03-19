@@ -26,7 +26,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
     bytes4 constant private RECLAIM_ID = bytes4(keccak256("reclaim(uint256)"));
 
     constructor(ENS _ens, bytes32 _baseNode, uint _transferPeriodEnds) public {
-        // Require that people have time to transfer names over. 
+        // Require that people have time to transfer names over.
         require(_transferPeriodEnds > now + 2 * MIGRATION_LOCK_PERIOD);
 
         ens = _ens;
@@ -89,7 +89,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
      */
     function register(uint256 id, address owner, uint duration) external live onlyController returns(uint) {
         require(available(id));
-        require(now + duration + GRACE_PERIOD > now); // Prevent future overflow
+        require(now + duration + GRACE_PERIOD > now + GRACE_PERIOD); // Prevent future overflow
 
         expiries[id] = now + duration;
         if(_exists(id)) {
@@ -106,7 +106,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
 
     function renew(uint256 id, uint duration) external live onlyController returns(uint) {
         require(expiries[id] + GRACE_PERIOD >= now); // Name must be registered here or in grace period
-        require(expiries[id] + duration + GRACE_PERIOD > duration); // Prevent future overflow
+        require(expiries[id] + duration + GRACE_PERIOD > duration + GRACE_PERIOD); // Prevent future overflow
 
         expiries[id] += duration;
         emit NameRenewed(id, expiries[id]);
