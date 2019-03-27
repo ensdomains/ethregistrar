@@ -70,7 +70,7 @@ contract('ETHRegistrarController', function (accounts) {
 		await registerOldNames(['name', 'name2'], registrantAccount);
 
 		const now = (await web3.eth.getBlock('latest')).timestamp;
-		baseRegistrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		baseRegistrar = await BaseRegistrar.new(ens.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), baseRegistrar.address);
 
 		priceOracle = await SimplePriceOracle.new(1);

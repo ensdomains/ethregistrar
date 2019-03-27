@@ -25,13 +25,13 @@ contract BaseRegistrarImplementation is BaseRegistrar {
     );
     bytes4 constant private RECLAIM_ID = bytes4(keccak256("reclaim(uint256)"));
 
-    constructor(ENS _ens, bytes32 _baseNode, uint _transferPeriodEnds) public {
+    constructor(ENS _ens, HashRegistrar _previousRegistrar, bytes32 _baseNode, uint _transferPeriodEnds) public {
         // Require that people have time to transfer names over.
         require(_transferPeriodEnds > now + 2 * MIGRATION_LOCK_PERIOD);
 
         ens = _ens;
         baseNode = _baseNode;
-        previousRegistrar = HashRegistrar(ens.owner(baseNode));
+        previousRegistrar = _previousRegistrar;
         transferPeriodEnds = _transferPeriodEnds;
     }
 

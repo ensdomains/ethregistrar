@@ -69,7 +69,7 @@ contract('BaseRegistrar', function (accounts) {
 		await registerOldNames(['name', 'name2'], registrantAccount);
 
 		const now = (await web3.eth.getBlock('latest')).timestamp;
-		registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		registrar = await BaseRegistrar.new(ens.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
 		await registrar.addController(controllerAccount, {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
 	});
