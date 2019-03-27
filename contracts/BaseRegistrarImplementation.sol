@@ -68,6 +68,11 @@ contract BaseRegistrarImplementation is BaseRegistrar {
         emit ControllerRemoved(controller);
     }
 
+    // Set the resolver for the TLD this registrar manages.
+    function setResolver(address resolver) external onlyOwner {
+        ens.setResolver(baseNode, resolver);
+    }
+
     // Returns the expiration timestamp of the specified id.
     function nameExpires(uint256 id) external view returns(uint) {
         return expiries[id];
