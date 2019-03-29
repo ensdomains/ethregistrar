@@ -35,6 +35,9 @@ contract BaseRegistrar is ERC721, Ownable {
     // Revoke controller permission for an address.
     function removeController(address controller) external;
 
+    // Set the resolver for the TLD this registrar manages.
+    function setResolver(address resolver) external;
+
     // Returns the expiration timestamp of the specified label hash.
     function nameExpires(uint256 id) external view returns(uint);
 

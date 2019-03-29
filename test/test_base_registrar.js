@@ -192,4 +192,9 @@ contract('BaseRegistrar', function (accounts) {
 		await registrar.register(sha3("name2"), accounts[1], 86400, {from: controllerAccount});
 		assert.equal(await ens.owner(namehash.hash("name2.eth")), accounts[1]);
 	});
+
+	it('should allow the owner to set a resolver address', async () => {
+		await registrar.setResolver(accounts[1], {from: ownerAccount});
+		assert.equal(await ens.resolver(namehash.hash('eth')), accounts[1]);
+	});
 });
