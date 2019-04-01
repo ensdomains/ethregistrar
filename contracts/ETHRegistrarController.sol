@@ -110,6 +110,11 @@ contract ETHRegistrarController is Ownable {
         emit NewPriceOracle(address(prices));
     }
 
+    function setCommitmentAges(uint _minCommitmentAge, uint _maxCommitmentAge) public onlyOwner {
+        minCommitmentAge = _minCommitmentAge;
+        maxCommitmentAge = _maxCommitmentAge;
+    }
+
     function withdraw() public onlyOwner {
         msg.sender.transfer(address(this).balance);
     }
