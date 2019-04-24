@@ -54,7 +54,7 @@ contract BaseRegistrar is ERC721, Ownable {
     /**
      * @dev Reclaim ownership of a name in ENS, if you own it in the registrar.
      */
-    function reclaim(uint256 id) external;
+    function reclaim(uint256 id, address owner) external;
 
     /**
      * @dev Transfers a registration from the initial registrar.

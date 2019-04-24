@@ -137,12 +137,12 @@ contract('BaseRegistrar', function (accounts) {
 		await ens.setSubnodeOwner(namehash.hash("eth"), sha3("newname"), ZERO_ADDRESS);
 		assert.equal(await ens.owner(namehash.hash("newname.eth")), ZERO_ADDRESS);
 		await ens.setSubnodeOwner(ZERO_HASH, sha3("eth"), registrar.address);
-		await registrar.reclaim(sha3("newname"), {from: registrantAccount});
+		await registrar.reclaim(sha3("newname"), registrantAccount, {from: registrantAccount});
 		assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
 	});
 
 	it('should prohibit anyone else from reclaiming a name', async () => {
-		await expectFailure(registrar.reclaim(sha3("newname"), {from: otherAccount}));
+		await expectFailure(registrar.reclaim(sha3("newname"), registrantAccount, {from: otherAccount}));
 	});
 
 	it('should permit the owner to transfer a registration', async () => {
@@ -163,7 +163,7 @@ contract('BaseRegistrar', function (accounts) {
 		await advanceTime((await registrar.nameExpires(sha3("newname"))).toNumber() - ts + 3600);
 
 		await expectFailure(registrar.transferFrom(registrantAccount, otherAccount, sha3("newname"), {from: registrantAccount}));
-		await expectFailure(registrar.reclaim(sha3("newname"), {from: registrantAccount}));
+		await expectFailure(registrar.reclaim(sha3("newname"), registrantAccount, {from: registrantAccount}));
 	});
 
 	it('should allow renewal during the grace period', async () => {
