@@ -23,7 +23,7 @@ contract BaseRegistrarImplementation is BaseRegistrar {
         keccak256("safeTransferFrom(address,address,uint256)") ^
         keccak256("safeTransferFrom(address,address,uint256,bytes)")
     );
-    bytes4 constant private RECLAIM_ID = bytes4(keccak256("reclaim(uint256)"));
+    bytes4 constant private RECLAIM_ID = bytes4(keccak256("reclaim(uint256,address)"));
 
     constructor(ENS _ens, HashRegistrar _previousRegistrar, bytes32 _baseNode, uint _transferPeriodEnds) public {
         // Require that people have time to transfer names over.
@@ -121,9 +121,9 @@ contract BaseRegistrarImplementation is BaseRegistrar {
     /**
      * @dev Reclaim ownership of a name in ENS, if you own it in the registrar.
      */
-    function reclaim(uint256 id) external live {
+    function reclaim(uint256 id, address owner) external live {
         require(_isApprovedOrOwner(msg.sender, id));
-        ens.setSubnodeOwner(baseNode, bytes32(id), ownerOf(id));
+        ens.setSubnodeOwner(baseNode, bytes32(id), owner);
     }
 
     /**

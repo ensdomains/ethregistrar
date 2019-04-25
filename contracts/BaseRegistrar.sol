@@ -6,7 +6,7 @@ import "openzeppelin-solidity/contracts/token/ERC721/ERC721.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 contract BaseRegistrar is ERC721, Ownable {
-    uint constant public GRACE_PERIOD = 30 days;
+    uint constant public GRACE_PERIOD = 90 days;
 
     event ControllerAdded(address indexed controller);
     event ControllerRemoved(address indexed controller);
@@ -54,7 +54,7 @@ contract BaseRegistrar is ERC721, Ownable {
     /**
      * @dev Reclaim ownership of a name in ENS, if you own it in the registrar.
      */
-    function reclaim(uint256 id) external;
+    function reclaim(uint256 id, address owner) external;
 
     /**
      * @dev Transfers a registration from the initial registrar.
