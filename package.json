@@ -1,6 +1,6 @@
 {
   "name": "@ensdomains/ethregistrar",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "",
   "main": "truffle-config.js",
   "directories": {
@@ -17,12 +17,15 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ensdomains/buffer": "0.0.10",
+    "@ensdomains/dnsregistrar": "^0.3.5",
+    "@ensdomains/dnssec-oracle": "^0.1.2",
     "@ensdomains/ens": "^0.3.4",
     "bluebird": "^3.5.3",
     "eth-ens-namehash": "^2.0.8",
-    "openzeppelin-solidity": "2.1.3",
+    "openzeppelin-solidity": "^2.1.3",
     "solium": "^1.2.3",
-    "truffle": "^5.0.5",
+    "truffle": "^5.0.19",
     "web3-utils": "^1.0.0-beta.48"
   }
 }
