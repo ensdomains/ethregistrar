@@ -60,7 +60,7 @@ contract ShortNameClaims is Ownable {
      *      using `claims`.
      * @param claimed The name being claimed (eg, 'foo')
      * @param dnsname The DNS-encoded name supporting the claim (eg, 'foo.test')
-     * @returns The claim ID.
+     * @return The claim ID.
      */
     function computeClaimId(string memory claimed, bytes memory dnsname) public pure returns(bytes32) {
         return keccak256(abi.encodePacked(claimed, dnsname));
@@ -69,7 +69,7 @@ contract ShortNameClaims is Ownable {
     /**
      * @dev Returns the cost associated with placing a claim.
      * @param claimed The name being claimed.
-     * @returns The cost in wei for this claim.
+     * @return The cost in wei for this claim.
      */
     function getClaimCost(string memory claimed) public view returns(uint) {
         return priceOracle.price(claimed, 0, REGISTRATION_PERIOD);
@@ -94,6 +94,7 @@ contract ShortNameClaims is Ownable {
      *              If `input` is not supplied, this RRSET must be a TXT record
      *              known to the oracle on `'_ens.' + name`, in the format
      *              `a=0x...`.
+     */
     function submitExactClaim(bytes memory name, bytes memory input, bytes memory proof) public payable {
         string memory claimed = getLabel(name, 0);
         handleClaim(claimed, name, input, proof);
@@ -118,6 +119,7 @@ contract ShortNameClaims is Ownable {
      *              If `input` is not supplied, this RRSET must be a TXT record
      *              known to the oracle on `'_ens.' + name`, in the format
      *              `a=0x...`.
+     */
     function submitCombinedClaim(bytes memory name, bytes memory input, bytes memory proof) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         bytes memory secondLabel = bytes(getLabel(name, 1));
@@ -148,6 +150,7 @@ contract ShortNameClaims is Ownable {
      *              If `input` is not supplied, this RRSET must be a TXT record
      *              known to the oracle on `'_ens.' + name`, in the format
      *              `a=0x...`.
+     */
     function submitPrefixClaim(bytes memory name, bytes memory input, bytes memory proof) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         require(firstLabel.equals(firstLabel.length - 3, bytes("eth")));
