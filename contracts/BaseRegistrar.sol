@@ -1,11 +1,11 @@
 pragma solidity >=0.4.24;
 
 import "@ensdomains/ens/contracts/ENS.sol";
-import "@ensdomains/ens/contracts/HashRegistrar.sol";
-import "openzeppelin-solidity/contracts/token/ERC721/ERC721.sol";
+import "@ensdomains/ens/contracts/Registrar.sol";
+import "openzeppelin-solidity/contracts/token/ERC721/IERC721.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
-contract BaseRegistrar is ERC721, Ownable {
+contract BaseRegistrar is IERC721, Ownable {
     uint constant public GRACE_PERIOD = 90 days;
 
     event ControllerAdded(address indexed controller);
@@ -24,7 +24,7 @@ contract BaseRegistrar is ERC721, Ownable {
     bytes32 public baseNode;
 
     // The interim registrar
-    HashRegistrar public previousRegistrar;
+    Registrar public previousRegistrar;
 
     // A map of addresses that are authorised to register and renew names.
     mapping(address=>bool) public controllers;
