@@ -1,12 +1,11 @@
 pragma solidity ^0.5.0;
 
-import "@ensdomains/dnssec-oracle/contracts/DNSSEC.sol";
-import "@ensdomains/dnssec-oracle/contracts/BytesUtils.sol";
-import "@ensdomains/dnsregistrar/contracts/DNSClaimChecker.sol";
-import "@ensdomains/buffer/contracts/Buffer.sol";
 import "./BaseRegistrar.sol";
 import "./StringUtils.sol";
 import "./PriceOracle.sol";
+
+import "@ensdomains/buffer/contracts/Buffer.sol";
+import "@ensdomains/dnssec-oracle/contracts/BytesUtils.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 /**
@@ -29,9 +28,9 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 contract ShortNameClaims is Ownable {
     uint constant public REGISTRATION_PERIOD = 31536000;
 
-    using StringUtils for string;
-    using BytesUtils for bytes;
     using Buffer for Buffer.buffer;
+    using BytesUtils for bytes;
+    using StringUtils for string;
 
     struct Claim {
         bytes32 labelHash;
@@ -39,18 +38,16 @@ contract ShortNameClaims is Ownable {
         uint paid;
     }
 
-    DNSSEC public oracle;
     PriceOracle public priceOracle;
     BaseRegistrar public registrar;
     mapping(bytes32=>Claim) public claims;
     uint public claimCount;
 
-    event ClaimSubmitted(string claimed, bytes dnsname, uint paid);
+    event ClaimSubmitted(string claimed, bytes dnsname, uint paid, address claimant);
     event ClaimApproved(bytes32 indexed claimId);
     event ClaimDeclined(bytes32 indexed claimId);
 
-    constructor(DNSSEC _oracle, PriceOracle _priceOracle, BaseRegistrar _registrar) public {
-        oracle = _oracle;
+    constructor(PriceOracle _priceOracle, BaseRegistrar _registrar) public {
         priceOracle = _priceOracle;
         registrar = _registrar;
     }
@@ -83,21 +80,11 @@ contract ShortNameClaims is Ownable {
      *      any excess will be returned to the sender.
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
-     * @param input Zero or more DNSSEC-signed RRSETs, in the format expected by
-     *              the DNSSEC oracle (https://github.com/ensdomains/dnssec-oracle/blob/0577b077a2e5454b4eb120cba595c69cf214b3b9/contracts/DNSSECImpl.sol#L129).
-     *              To be valid, the first entry must build off `proof`, and
-     *              the last entry must be a TXT record on `'_ens.' + name`.
-     *              If `input` is the empty string, `proof` is assumed to be the
-     *              required TXT record, and already known to the oracle.
-     * @param proof An RRSET already known to the DNSSEC oracle. If `input` is
-     *              supplied, this RRSET must validate the first entry of `input`.
-     *              If `input` is not supplied, this RRSET must be a TXT record
-     *              known to the oracle on `'_ens.' + name`, in the format
-     *              `a=0x...`.
+     * @param claimant The address of the claimant.
      */
-    function submitExactClaim(bytes memory name, bytes memory input, bytes memory proof) public payable {
+    function submitExactClaim(bytes memory name, address claimant) public payable {
         string memory claimed = getLabel(name, 0);
-        handleClaim(claimed, name, input, proof);
+        handleClaim(claimed, name, claimant);
     }
 
     /**
@@ -108,19 +95,9 @@ contract ShortNameClaims is Ownable {
      *      any excess will be returned to the sender.
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
-     * @param input Zero or more DNSSEC-signed RRSETs, in the format expected by
-     *              the DNSSEC oracle (https://github.com/ensdomains/dnssec-oracle/blob/0577b077a2e5454b4eb120cba595c69cf214b3b9/contracts/DNSSECImpl.sol#L129).
-     *              To be valid, the first entry must build off `proof`, and
-     *              the last entry must be a TXT record on `'_ens.' + name`.
-     *              If `input` is the empty string, `proof` is assumed to be the
-     *              required TXT record, and already known to the oracle.
-     * @param proof An RRSET already known to the DNSSEC oracle. If `input` is
-     *              supplied, this RRSET must validate the first entry of `input`.
-     *              If `input` is not supplied, this RRSET must be a TXT record
-     *              known to the oracle on `'_ens.' + name`, in the format
-     *              `a=0x...`.
+     * @param claimant The address of the claimant.
      */
-    function submitCombinedClaim(bytes memory name, bytes memory input, bytes memory proof) public payable {
+    function submitCombinedClaim(bytes memory name, address claimant) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         bytes memory secondLabel = bytes(getLabel(name, 1));
         Buffer.buffer memory buf;
@@ -128,7 +105,7 @@ contract ShortNameClaims is Ownable {
         buf.append(firstLabel);
         buf.append(secondLabel);
 
-        handleClaim(string(buf.buf), name, input, proof);
+        handleClaim(string(buf.buf), name, claimant);
     }
 
     /**
@@ -139,22 +116,12 @@ contract ShortNameClaims is Ownable {
      *      any excess will be returned to the sender.
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
-     * @param input Zero or more DNSSEC-signed RRSETs, in the format expected by
-     *              the DNSSEC oracle (https://github.com/ensdomains/dnssec-oracle/blob/0577b077a2e5454b4eb120cba595c69cf214b3b9/contracts/DNSSECImpl.sol#L129).
-     *              To be valid, the first entry must build off `proof`, and
-     *              the last entry must be a TXT record on `'_ens.' + name`.
-     *              If `input` is the empty string, `proof` is assumed to be the
-     *              required TXT record, and already known to the oracle.
-     * @param proof An RRSET already known to the DNSSEC oracle. If `input` is
-     *              supplied, this RRSET must validate the first entry of `input`.
-     *              If `input` is not supplied, this RRSET must be a TXT record
-     *              known to the oracle on `'_ens.' + name`, in the format
-     *              `a=0x...`.
+     * @param claimant The address of the claimant.
      */
-    function submitPrefixClaim(bytes memory name, bytes memory input, bytes memory proof) public payable {
+    function submitPrefixClaim(bytes memory name, address claimant) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         require(firstLabel.equals(firstLabel.length - 3, bytes("eth")));
-        handleClaim(string(firstLabel.substring(0, firstLabel.length - 3)), name, input, proof);
+        handleClaim(string(firstLabel.substring(0, firstLabel.length - 3)), name, claimant);
     }
 
     function approveClaim(bytes32 claimId) onlyOwner public {
@@ -169,7 +136,10 @@ contract ShortNameClaims is Ownable {
         address(uint160(registrar.owner())).transfer(claim.paid);
     }
 
-    function declineClaim(bytes32 claimId) onlyOwner public {
+    function declineClaim(bytes32 claimId) public {
+        // Only callable by contract owner or claimant
+        require(msg.sender == owner() || msg.sender == claims[claimId].claimant);
+
         Claim memory claim = claims[claimId];
         require(claim.paid > 0, "Claim not found");
 
@@ -180,7 +150,7 @@ contract ShortNameClaims is Ownable {
         address(uint160(claim.claimant)).transfer(claim.paid);
     }
 
-    function handleClaim(string memory claimed, bytes memory name, bytes memory input, bytes memory proof) internal {
+    function handleClaim(string memory claimed, bytes memory name, address claimant) internal {
         uint len = claimed.strlen();
         require(len >= 3 && len <= 6);
 
@@ -196,16 +166,9 @@ contract ShortNameClaims is Ownable {
             msg.sender.transfer(msg.value - price);
         }
 
-        if(input.length > 0) {
-          proof = oracle.submitRRSets(input, proof);
-        }
-
-        (address addr, bool found) = DNSClaimChecker.getOwnerAddress(oracle, name, proof);
-        require(found, "No DNS record found");
-
-        claims[claimId] = Claim(keccak256(bytes(claimed)), addr, price);
+        claims[claimId] = Claim(keccak256(bytes(claimed)), claimant, price);
         claimCount++;
-        emit ClaimSubmitted(claimed, name, price);
+        emit ClaimSubmitted(claimed, name, price, claimant);
     }
 
     function getLabel(bytes memory name, uint idx) internal pure returns(string memory) {
