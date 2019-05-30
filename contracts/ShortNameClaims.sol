@@ -57,10 +57,11 @@ contract ShortNameClaims is Ownable {
      *      using `claims`.
      * @param claimed The name being claimed (eg, 'foo')
      * @param dnsname The DNS-encoded name supporting the claim (eg, 'foo.test')
+     * @param claimant The address making the claim.
      * @return The claim ID.
      */
-    function computeClaimId(string memory claimed, bytes memory dnsname) public pure returns(bytes32) {
-        return keccak256(abi.encodePacked(claimed, dnsname));
+    function computeClaimId(string memory claimed, bytes memory dnsname, address claimant) public pure returns(bytes32) {
+        return keccak256(abi.encodePacked(keccak256(bytes(claimed)), keccak256(dnsname), claimant));
     }
 
     /**
@@ -154,7 +155,7 @@ contract ShortNameClaims is Ownable {
         uint len = claimed.strlen();
         require(len >= 3 && len <= 6);
 
-        bytes32 claimId = computeClaimId(claimed, name);
+        bytes32 claimId = computeClaimId(claimed, name, claimant);
         require(claims[claimId].paid == 0, "Claim already submitted");
 
         // Require that there are at most two labels (name.tld)

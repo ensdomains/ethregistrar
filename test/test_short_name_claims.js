@@ -78,7 +78,7 @@ contract('ShortNameClaims', function (accounts) {
 
 		assert.equal(await claims.claimCount(), 1);
 
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."));
+		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."), claimantAccount);
 		const { labelHash, claimant, paid } = await claims.claims(claimId);
 		assert.equal(labelHash, sha3("foo"));
 		assert.equal(claimant, claimantAccount);
@@ -122,14 +122,14 @@ contract('ShortNameClaims', function (accounts) {
 	});
 
 	it('should not allow non-owners to approve claims', async () => {
-		const claimId = await claims.computeClaimId("footv", dns.hexEncodeName("foo.tv."));
+		const claimId = await claims.computeClaimId("footv", dns.hexEncodeName("foo.tv."), claimantAccount);
 		await expectFailure(claims.approveClaim(claimId, {from: claimantAccount}));
 	});
 
 	it('should allow the owner to approve claims', async () => {
 		const balanceBefore = toBN(await web3.eth.getBalance(registrarOwner));
 
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."));
+		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."), claimantAccount);
 		const tx = await claims.approveClaim(claimId);
 		const logs = tx.receipt.logs;
 		assert.isAtLeast(logs.length, 1);
@@ -142,24 +142,24 @@ contract('ShortNameClaims', function (accounts) {
 	});
 
 	it('should not allow approving nonexistent claims', async () => {
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."));
+		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."), claimantAccount);
 		await expectFailure(claims.approveClaim(claimId));
 	})
 
 	it('should not permit approving a claim for an already registered name', async () => {
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."));
+		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."), claimantAccount);
 		await expectFailure(claims.approveClaim(claimId));
 	});
 
 	it('should not allow non-owners to decline claims', async () => {
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."));
+		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."), claimantAccount);
 		await expectFailure(claims.declineClaim(claimId, {from: accounts[2]}));
 	});
 
 	it('should allow the owner to decline claims', async () => {
 		const balanceBefore = toBN(await web3.eth.getBalance(claimantAccount));
 
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."));
+		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."), claimantAccount);
 		const tx = await claims.declineClaim(claimId);
 		const logs = tx.receipt.logs;
 		assert.isAtLeast(logs.length, 1);
@@ -173,13 +173,13 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should allow claimant to decline their own claim', async () => {
 		await claims.submitExactClaim(dns.hexEncodeName('bar.test.'), claimantAccount, {value: 31536000});
-		const claimId = await claims.computeClaimId("bar", dns.hexEncodeName("bar.test."));
+		const claimId = await claims.computeClaimId("bar", dns.hexEncodeName("bar.test."), claimantAccount);
 		await claims.declineClaim(claimId);
 		assert.equal(await claims.claimCount(), 1);
 	});
 
 	it('should not allow declining nonexistent claims', async () => {
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."));
+		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."), claimantAccount);
 		await expectFailure(claims.declineClaim(claimId));
 	});
 });
