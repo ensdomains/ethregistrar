@@ -43,7 +43,7 @@ contract ShortNameClaims is Ownable {
     mapping(bytes32=>Claim) public claims;
     uint public claimCount;
 
-    event ClaimSubmitted(string claimed, bytes dnsname, uint paid, address claimant);
+    event ClaimSubmitted(string claimed, bytes dnsname, uint paid, address claimant, string email);
     event ClaimApproved(bytes32 indexed claimId);
     event ClaimDeclined(bytes32 indexed claimId);
 
@@ -60,8 +60,8 @@ contract ShortNameClaims is Ownable {
      * @param claimant The address making the claim.
      * @return The claim ID.
      */
-    function computeClaimId(string memory claimed, bytes memory dnsname, address claimant) public pure returns(bytes32) {
-        return keccak256(abi.encodePacked(keccak256(bytes(claimed)), keccak256(dnsname), claimant));
+    function computeClaimId(string memory claimed, bytes memory dnsname, address claimant, string memory email) public pure returns(bytes32) {
+        return keccak256(abi.encodePacked(keccak256(bytes(claimed)), keccak256(dnsname), claimant, keccak256(bytes(email))));
     }
 
     /**
@@ -82,14 +82,15 @@ contract ShortNameClaims is Ownable {
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
      * @param claimant The address of the claimant.
+     * @param email An email address for correspondence regarding the claim.
      */
-    function submitExactClaim(bytes memory name, address claimant) public payable {
+    function submitExactClaim(bytes memory name, address claimant, string memory email) public payable {
         string memory claimed = getLabel(name, 0);
-        handleClaim(claimed, name, claimant);
+        handleClaim(claimed, name, claimant, email);
     }
 
     /**
-     * @dev Submits a claim for an exact match (eg, foo.tv -> footv).
+     * @dev Submits a claim for match on name+tld (eg, foo.tv -> footv).
      *      Claimants must provide an amount of ether equal to 365 days'
      *      registration cost; call `getClaimCost` to determine this amount.
      *      Claimants should supply a little extra in case of variation in price;
@@ -97,8 +98,9 @@ contract ShortNameClaims is Ownable {
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
      * @param claimant The address of the claimant.
+     * @param email An email address for correspondence regarding the claim.
      */
-    function submitCombinedClaim(bytes memory name, address claimant) public payable {
+    function submitCombinedClaim(bytes memory name, address claimant, string memory email) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         bytes memory secondLabel = bytes(getLabel(name, 1));
         Buffer.buffer memory buf;
@@ -106,11 +108,11 @@ contract ShortNameClaims is Ownable {
         buf.append(firstLabel);
         buf.append(secondLabel);
 
-        handleClaim(string(buf.buf), name, claimant);
+        handleClaim(string(buf.buf), name, claimant, email);
     }
 
     /**
-     * @dev Submits a claim for an exact match (eg, fooeth.test -> foo.eth).
+     * @dev Submits a claim for prefix match (eg, fooeth.test -> foo.eth).
      *      Claimants must provide an amount of ether equal to 365 days'
      *      registration cost; call `getClaimCost` to determine this amount.
      *      Claimants should supply a little extra in case of variation in price;
@@ -118,11 +120,12 @@ contract ShortNameClaims is Ownable {
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
      * @param claimant The address of the claimant.
+     * @param email An email address for correspondence regarding the claim.
      */
-    function submitPrefixClaim(bytes memory name, address claimant) public payable {
+    function submitPrefixClaim(bytes memory name, address claimant, string memory email) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         require(firstLabel.equals(firstLabel.length - 3, bytes("eth")));
-        handleClaim(string(firstLabel.substring(0, firstLabel.length - 3)), name, claimant);
+        handleClaim(string(firstLabel.substring(0, firstLabel.length - 3)), name, claimant, email);
     }
 
     function approveClaim(bytes32 claimId) onlyOwner public {
@@ -151,11 +154,11 @@ contract ShortNameClaims is Ownable {
         address(uint160(claim.claimant)).transfer(claim.paid);
     }
 
-    function handleClaim(string memory claimed, bytes memory name, address claimant) internal {
+    function handleClaim(string memory claimed, bytes memory name, address claimant, string memory email) internal {
         uint len = claimed.strlen();
         require(len >= 3 && len <= 6);
 
-        bytes32 claimId = computeClaimId(claimed, name, claimant);
+        bytes32 claimId = computeClaimId(claimed, name, claimant, email);
         require(claims[claimId].paid == 0, "Claim already submitted");
 
         // Require that there are at most two labels (name.tld)
@@ -169,7 +172,7 @@ contract ShortNameClaims is Ownable {
 
         claims[claimId] = Claim(keccak256(bytes(claimed)), claimant, price);
         claimCount++;
-        emit ClaimSubmitted(claimed, name, price, claimant);
+        emit ClaimSubmitted(claimed, name, price, claimant, email);
     }
 
     function getLabel(bytes memory name, uint idx) internal pure returns(string memory) {
