@@ -32,24 +32,48 @@ contract ShortNameClaims is Ownable {
     using BytesUtils for bytes;
     using StringUtils for string;
 
+    enum Phase {
+        OPEN,
+        REVIEW,
+        FINAL
+    }
+
+    enum Status {
+        PENDING,
+        APPROVED,
+        DECLINED,
+        WITHDRAWN
+    }
+
     struct Claim {
         bytes32 labelHash;
         address claimant;
         uint paid;
+        Status status;
     }
 
     PriceOracle public priceOracle;
     BaseRegistrar public registrar;
     mapping(bytes32=>Claim) public claims;
-    uint public claimCount;
+    mapping(bytes32=>bool) approvedNames;
+    uint public pendingClaims;
+    uint public unresolvedClaims;
+    Phase public phase;
+    address public ratifier;
 
     event ClaimSubmitted(string claimed, bytes dnsname, uint paid, address claimant, string email);
-    event ClaimApproved(bytes32 indexed claimId);
-    event ClaimDeclined(bytes32 indexed claimId);
+    event ClaimStatusChanged(bytes32 indexed claimId, Status status);
 
-    constructor(PriceOracle _priceOracle, BaseRegistrar _registrar) public {
+    constructor(PriceOracle _priceOracle, BaseRegistrar _registrar, address _ratifier) public {
         priceOracle = _priceOracle;
         registrar = _registrar;
+        ratifier = _ratifier;
+        phase = Phase.OPEN;
+    }
+
+    modifier inPhase(Phase p) {
+        require(phase == p);
+        _;
     }
 
     /**
@@ -128,33 +152,143 @@ contract ShortNameClaims is Ownable {
         handleClaim(string(firstLabel.substring(0, firstLabel.length - 3)), name, claimant, email);
     }
 
-    function approveClaim(bytes32 claimId) onlyOwner public {
-        Claim memory claim = claims[claimId];
-        require(claim.paid > 0, "Claim not found");
-
-        claimCount--;
-        delete claims[claimId];
-        emit ClaimApproved(claimId);
-
-        registrar.register(uint256(claim.labelHash), claim.claimant, REGISTRATION_PERIOD);
-        address(uint160(registrar.owner())).transfer(claim.paid);
+    /**
+     * @dev Closes the claim submission period.
+     *      Callable only by the owner.
+     */
+    function closeClaims() external onlyOwner inPhase(Phase.OPEN) {
+        phase = Phase.REVIEW;
     }
 
-    function declineClaim(bytes32 claimId) public {
-        // Only callable by contract owner or claimant
-        require(msg.sender == owner() || msg.sender == claims[claimId].claimant);
+    /**
+     * @dev Ratifies the current set of claims.
+     *      Ratification freezes the claims and their resolutions, and permits
+     *      them to be acted on.
+     */
+    function ratifyClaims() external inPhase(Phase.REVIEW) {
+        // Only the ratifier can ratify.
+        require(msg.sender == ratifier);
+        // Can't ratify until all claims have a resolution.
+        require(pendingClaims == 0);
+        phase = Phase.FINAL;
+    }
+
+    /**
+     * @dev Cleans up the contract, after all claims are resolved.
+     *      Callable only by the owner, and only in final state.
+     */
+    function destroy() external onlyOwner inPhase(Phase.FINAL) {
+        require(unresolvedClaims == 0);
+        selfdestruct(address(uint160(ratifier)));
+    }
+
+    /**
+     * @dev Sets the status of a claim to either APPROVED or DECLINED.
+     *      Callable only during the review phase, and only by the owner or
+     *      ratifier.
+     * @param claimId The claim to set the status of.
+     * @param status The status to set - must be APPROVED or DECLINED.
+     */
+    function setClaimStatus(bytes32 claimId, Status status) public inPhase(Phase.REVIEW) {
+        // Only callable by owner or ratifier
+        require(msg.sender == owner() || msg.sender == ratifier);
+
+        // Can't set claim back to pending
+        require(status == Status.APPROVED || status == Status.DECLINED);
 
         Claim memory claim = claims[claimId];
         require(claim.paid > 0, "Claim not found");
 
-        claimCount--;
+        if(claim.status == Status.PENDING) {
+          // Claim went from pending -> approved/declined; update counters
+          pendingClaims--;
+          unresolvedClaims++;
+        } else if(claim.status == Status.APPROVED) {
+          // Claim was previously approved; remove from approved map
+          approvedNames[claim.labelHash] = false;
+        }
+
+        // Claim was just approved; check the name was not already used, and add
+        // to approved map
+        if(status == Status.APPROVED) {
+          require(!approvedNames[claim.labelHash]);
+          approvedNames[claim.labelHash] = true;
+        }
+
+        claims[claimId].status = status;
+        emit ClaimStatusChanged(claimId, status);
+    }
+
+    /**
+     * @dev Sets the status of multiple claims. Callable only during the review
+     *      phase, and only by the owner or ratifier.
+     * @param approved A list of approved claim IDs.
+     * @param declined A list of declined claim IDs.
+     */
+    function setClaimStatuses(bytes32[] calldata approved, bytes32[] calldata declined) external {
+        for(uint i = 0; i < approved.length; i++) {
+            setClaimStatus(approved[i], Status.APPROVED);
+        }
+        for(uint i = 0; i < declined.length; i++) {
+            setClaimStatus(declined[i], Status.DECLINED);
+        }
+    }
+
+    /**
+     * @dev Resolves a claim. Callable by anyone, only in the final phase.
+     *      Resolving a claim either registers the name or refunds the claimant.
+     * @param claimId The claim ID to resolve.
+     */
+    function resolveClaim(bytes32 claimId) public inPhase(Phase.FINAL) {
+        Claim memory claim = claims[claimId];
+        require(claim.paid > 0, "Claim not found");
+
+        if(claim.status == Status.APPROVED) {
+            registrar.register(uint256(claim.labelHash), claim.claimant, REGISTRATION_PERIOD);
+            address(uint160(registrar.owner())).transfer(claim.paid);
+        } else if(claim.status == Status.DECLINED) {
+            address(uint160(claim.claimant)).transfer(claim.paid);
+        } else {
+            // It should not be possible to get to FINAL with claim IDs that are
+            // not either APPROVED or DECLINED.
+            assert(false);
+        }
+
+        unresolvedClaims--;
         delete claims[claimId];
-        emit ClaimDeclined(claimId);
+    }
+
+    /**
+     * @dev Resolves multiple claims. Callable by anyone, only in the final phase.
+     * @param claimIds A list of claim IDs to resolve.
+     */
+    function resolveClaims(bytes32[] calldata claimIds) external {
+        for(uint i = 0; i < claimIds.length; i++) {
+            resolveClaim(claimIds[i]);
+        }
+    }
+
+    /**
+     * @dev Withdraws a claim and refunds the claimant.
+     *      Callable only by the claimant, at any time.
+     * @param claimId The ID of the claim to withdraw.
+     */
+    function withdrawClaim(bytes32 claimId) external {
+        Claim memory claim = claims[claimId];
+
+        // Only callable by claimant
+        require(msg.sender == claim.claimant);
+
+        if(claim.status == Status.PENDING) {
+            pendingClaims--;
+        }
 
         address(uint160(claim.claimant)).transfer(claim.paid);
+        emit ClaimStatusChanged(claimId, Status.WITHDRAWN);
+        delete claims[claimId];
     }
 
-    function handleClaim(string memory claimed, bytes memory name, address claimant, string memory email) internal {
+    function handleClaim(string memory claimed, bytes memory name, address claimant, string memory email) internal inPhase(Phase.OPEN) {
         uint len = claimed.strlen();
         require(len >= 3 && len <= 6);
 
@@ -170,8 +304,8 @@ contract ShortNameClaims is Ownable {
             msg.sender.transfer(msg.value - price);
         }
 
-        claims[claimId] = Claim(keccak256(bytes(claimed)), claimant, price);
-        claimCount++;
+        claims[claimId] = Claim(keccak256(bytes(claimed)), claimant, price, Status.PENDING);
+        pendingClaims++;
         emit ClaimSubmitted(claimed, name, price, claimant, email);
     }
 
