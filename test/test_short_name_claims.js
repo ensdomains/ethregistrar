@@ -95,6 +95,8 @@ contract('ShortNameClaims', function (accounts) {
 		assert.equal(claimant, claimantAccount);
 		assert.equal(paid.toNumber(), 31536000);
 		assert.equal(status, PENDING);
+
+		await claims.submitExactClaim(dns.hexEncodeName('baz.test.'), claimantAccount, 'test@example.com', {value: 31536000});
 	});
 
 	it('should permit a DNS name owner to register a claim on a prefix ending with eth', async () => {
@@ -103,7 +105,7 @@ contract('ShortNameClaims', function (accounts) {
 		assert.equal(logs.length, 1);
 		assert.equal(logs[0].event, "ClaimSubmitted");
 		assert.equal(logs[0].args.claimed, "foo");
-		assert.equal(await claims.pendingClaims(), 2);
+		assert.equal(await claims.pendingClaims(), 3);
 	});
 
 	it('should fail to register a prefix of a name if its suffix is not eth', async () => {
@@ -116,7 +118,7 @@ contract('ShortNameClaims', function (accounts) {
 		assert.equal(logs.length, 1);
 		assert.equal(logs[0].event, "ClaimSubmitted");
 		assert.equal(logs[0].args.claimed, "footv");
-		assert.equal(await claims.pendingClaims(), 3);
+		assert.equal(await claims.pendingClaims(), 4);
 	});
 
 	it('should not allow subdomains to be used in a claim', async () => {
@@ -159,10 +161,14 @@ contract('ShortNameClaims', function (accounts) {
 		assert.equal(logs[0].args.claimId, claimId);
 		assert.equal(logs[0].args.status, DECLINED);
 		assert.equal(await claims.unresolvedClaims(), 1);
-		assert.equal(await claims.pendingClaims(), 2);
+		assert.equal(await claims.pendingClaims(), 3);
 
 		const { status } = await claims.claims(claimId);
 		assert.equal(status, DECLINED);
+
+		await claims.setClaimStatus(await claims.computeClaimId("baz", dns.hexEncodeName("baz.test."), claimantAccount, 'test@example.com'), false, {from: ownerAccount});
+		assert.equal(await claims.unresolvedClaims(), 2);
+		assert.equal(await claims.pendingClaims(), 2);
 	});
 
 	it('should allow changing the claim status', async () => {
@@ -173,7 +179,7 @@ contract('ShortNameClaims', function (accounts) {
 		assert.equal(logs[0].event, "ClaimStatusChanged");
 		assert.equal(logs[0].args.claimId, claimId);
 		assert.equal(logs[0].args.status, APPROVED);
-		assert.equal(await claims.unresolvedClaims(), 1);
+		assert.equal(await claims.unresolvedClaims(), 2);
 		assert.equal(await claims.pendingClaims(), 2);
 	});
 
@@ -200,7 +206,7 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not permit ratification until all claims are resolved', async () => {
 		await expectFailure(claims.ratifyClaims({from: ratifierAccount}));
-	})
+	});
 
 	it('should allow claimant to withdraw their claim', async () => {
 		const claimId = await claims.computeClaimId("footv", dns.hexEncodeName("foo.tv."), claimantAccount, 'test@example.com');
@@ -210,7 +216,7 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not permit the owner to ratify', async () => {
 		await expectFailure(claims.ratifyClaims({from: ownerAccount}));
-	})
+	});
 
 	it('should permit ratification once all claims are resolved', async () => {
 		await claims.ratifyClaims({from: ratifierAccount});
@@ -220,13 +226,19 @@ contract('ShortNameClaims', function (accounts) {
 	it('should resolve approved claims', async () => {
 		const balanceBefore = toBN(await web3.eth.getBalance(registrarOwner));
 		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."), claimantAccount, 'test@example.com');
-		assert.equal(await claims.unresolvedClaims(), 2);
+		assert.equal(await claims.unresolvedClaims(), 3);
 
 		await claims.resolveClaim(claimId, {from: ownerAccount});
 
-		assert.equal(await claims.unresolvedClaims(), 1);
+		assert.equal(await claims.unresolvedClaims(), 2);
 		const balanceAfter = toBN(await web3.eth.getBalance(registrarOwner));
 		assert.equal(balanceAfter.sub(balanceBefore).toNumber(), 31536000);
+	});
+
+	it('should allow claimant to withdraw their claim after ratification', async () => {
+		const claimId = await claims.computeClaimId("baz", dns.hexEncodeName("baz.test."), claimantAccount, 'test@example.com');
+		await claims.withdrawClaim(claimId, {from: claimantAccount});
+		assert.equal(await claims.unresolvedClaims(), 1);
 	});
 
 	it('should not self destruct while claims are unresolved', async () => {

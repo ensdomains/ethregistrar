@@ -279,6 +279,8 @@ contract ShortNameClaims is Ownable {
 
         if(claim.status == Status.PENDING) {
             pendingClaims--;
+        } else {
+            unresolvedClaims--;
         }
 
         toPayable(claim.claimant).transfer(claim.paid);
