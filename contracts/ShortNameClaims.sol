@@ -72,7 +72,7 @@ contract ShortNameClaims is Ownable {
     }
 
     modifier inPhase(Phase p) {
-        require(phase == p);
+        require(phase == p, "Not in required phase");
         _;
     }
 
@@ -179,7 +179,7 @@ contract ShortNameClaims is Ownable {
      */
     function destroy() external onlyOwner inPhase(Phase.FINAL) {
         require(unresolvedClaims == 0);
-        selfdestruct(address(uint160(ratifier)));
+        selfdestruct(toPayable(ratifier));
     }
 
     /**
@@ -193,7 +193,7 @@ contract ShortNameClaims is Ownable {
         // Only callable by owner or ratifier
         require(msg.sender == owner() || msg.sender == ratifier);
 
-        // Can't set claim back to pending
+        // Can't set claim back to pending or to withdrawn
         require(status == Status.APPROVED || status == Status.DECLINED);
 
         Claim memory claim = claims[claimId];
@@ -245,9 +245,9 @@ contract ShortNameClaims is Ownable {
 
         if(claim.status == Status.APPROVED) {
             registrar.register(uint256(claim.labelHash), claim.claimant, REGISTRATION_PERIOD);
-            address(uint160(registrar.owner())).transfer(claim.paid);
+            toPayable(registrar.owner()).transfer(claim.paid);
         } else if(claim.status == Status.DECLINED) {
-            address(uint160(claim.claimant)).transfer(claim.paid);
+            toPayable(claim.claimant).transfer(claim.paid);
         } else {
             // It should not be possible to get to FINAL with claim IDs that are
             // not either APPROVED or DECLINED.
@@ -283,7 +283,7 @@ contract ShortNameClaims is Ownable {
             pendingClaims--;
         }
 
-        address(uint160(claim.claimant)).transfer(claim.paid);
+        toPayable(claim.claimant).transfer(claim.paid);
         emit ClaimStatusChanged(claimId, Status.WITHDRAWN);
         delete claims[claimId];
     }
@@ -321,5 +321,9 @@ contract ShortNameClaims is Ownable {
         if(offset >= name.length) return '';
         uint len = name.readUint8(offset);
         return string(name.substring(offset + 1, len));
+    }
+
+    function toPayable(address addr) internal pure returns(address payable) {
+        return address(uint160(addr));
     }
 }
