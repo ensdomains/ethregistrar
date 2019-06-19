@@ -187,14 +187,11 @@ contract ShortNameClaims is Ownable {
      *      Callable only during the review phase, and only by the owner or
      *      ratifier.
      * @param claimId The claim to set the status of.
-     * @param status The status to set - must be APPROVED or DECLINED.
+     * @param approved True if the claim is approved, false if it is declined.
      */
-    function setClaimStatus(bytes32 claimId, Status status) public inPhase(Phase.REVIEW) {
+    function setClaimStatus(bytes32 claimId, bool approved) public inPhase(Phase.REVIEW) {
         // Only callable by owner or ratifier
         require(msg.sender == owner() || msg.sender == ratifier);
-
-        // Can't set claim back to pending or to withdrawn
-        require(status == Status.APPROVED || status == Status.DECLINED);
 
         Claim memory claim = claims[claimId];
         require(claim.paid > 0, "Claim not found");
@@ -210,11 +207,12 @@ contract ShortNameClaims is Ownable {
 
         // Claim was just approved; check the name was not already used, and add
         // to approved map
-        if(status == Status.APPROVED) {
+        if(approved) {
           require(!approvedNames[claim.labelHash]);
           approvedNames[claim.labelHash] = true;
         }
 
+        Status status = approved?Status.APPROVED:Status.DECLINED;
         claims[claimId].status = status;
         emit ClaimStatusChanged(claimId, status);
     }
@@ -227,10 +225,10 @@ contract ShortNameClaims is Ownable {
      */
     function setClaimStatuses(bytes32[] calldata approved, bytes32[] calldata declined) external {
         for(uint i = 0; i < approved.length; i++) {
-            setClaimStatus(approved[i], Status.APPROVED);
+            setClaimStatus(approved[i], true);
         }
         for(uint i = 0; i < declined.length; i++) {
-            setClaimStatus(declined[i], Status.DECLINED);
+            setClaimStatus(declined[i], false);
         }
     }
 

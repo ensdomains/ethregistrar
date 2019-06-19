@@ -137,7 +137,7 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not permit claim status to be set during the open phase', async () => {
 		const claimId = await claims.computeClaimId("footv", dns.hexEncodeName("foo.tv."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, APPROVED, {from: ownerAccount}));
+		await expectFailure(claims.setClaimStatus(claimId, true, {from: ownerAccount}));
 	});
 
 	it('should close claims successfully', async () => {
@@ -147,12 +147,12 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not allow non-owners to set claim status', async () => {
 		const claimId = await claims.computeClaimId("footv", dns.hexEncodeName("foo.tv."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, APPROVED, {from: claimantAccount}));
+		await expectFailure(claims.setClaimStatus(claimId, true, {from: claimantAccount}));
 	});
 
 	it('should allow the contract owner to set claim status', async () => {
 		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."), claimantAccount, 'test@example.com');
-		const tx = await claims.setClaimStatus(claimId, DECLINED, {from: ownerAccount});
+		const tx = await claims.setClaimStatus(claimId, false, {from: ownerAccount});
 		const logs = tx.receipt.logs;
 		assert.isAtLeast(logs.length, 1);
 		assert.equal(logs[0].event, "ClaimStatusChanged");
@@ -167,7 +167,7 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should allow changing the claim status', async () => {
 		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."), claimantAccount, 'test@example.com');
-		const tx = await claims.setClaimStatus(claimId, APPROVED, {from: ownerAccount});
+		const tx = await claims.setClaimStatus(claimId, true, {from: ownerAccount});
 		const logs = tx.receipt.logs;
 		assert.isAtLeast(logs.length, 1);
 		assert.equal(logs[0].event, "ClaimStatusChanged");
@@ -177,19 +177,14 @@ contract('ShortNameClaims', function (accounts) {
 		assert.equal(await claims.pendingClaims(), 2);
 	});
 
-	it('should not allow setting claim status back to pending', async () => {
-		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("foo.test."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, PENDING, {from: ownerAccount}));
-	});
-
 	it('should not permit approving two claims for the same name', async () => {
 		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, APPROVED, {from: ownerAccount}));
+		await expectFailure(claims.setClaimStatus(claimId, true, {from: ownerAccount}));
 	});
 
 	it('should allow the ratifier to set claim status', async () => {
 		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."), claimantAccount, 'test@example.com');
-		const tx = await claims.setClaimStatus(claimId, DECLINED, {from: ratifierAccount});
+		const tx = await claims.setClaimStatus(claimId, false, {from: ratifierAccount});
 		const logs = tx.receipt.logs;
 		assert.isAtLeast(logs.length, 1);
 		assert.equal(logs[0].event, "ClaimStatusChanged");
@@ -200,7 +195,7 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not allow setting the status of nonexistent claims', async () => {
 		const claimId = await claims.computeClaimId("bleh", dns.hexEncodeName("bleh.test."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, APPROVED, {from: ownerAccount}));
+		await expectFailure(claims.setClaimStatus(claimId, true, {from: ownerAccount}));
 	});
 
 	it('should not permit ratification until all claims are resolved', async () => {
