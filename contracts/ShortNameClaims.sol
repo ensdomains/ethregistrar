@@ -32,24 +32,48 @@ contract ShortNameClaims is Ownable {
     using BytesUtils for bytes;
     using StringUtils for string;
 
+    enum Phase {
+        OPEN,
+        REVIEW,
+        FINAL
+    }
+
+    enum Status {
+        PENDING,
+        APPROVED,
+        DECLINED,
+        WITHDRAWN
+    }
+
     struct Claim {
         bytes32 labelHash;
         address claimant;
         uint paid;
+        Status status;
     }
 
     PriceOracle public priceOracle;
     BaseRegistrar public registrar;
     mapping(bytes32=>Claim) public claims;
-    uint public claimCount;
+    mapping(bytes32=>bool) approvedNames;
+    uint public pendingClaims;
+    uint public unresolvedClaims;
+    Phase public phase;
+    address public ratifier;
 
-    event ClaimSubmitted(string claimed, bytes dnsname, uint paid, address claimant);
-    event ClaimApproved(bytes32 indexed claimId);
-    event ClaimDeclined(bytes32 indexed claimId);
+    event ClaimSubmitted(string claimed, bytes dnsname, uint paid, address claimant, string email);
+    event ClaimStatusChanged(bytes32 indexed claimId, Status status);
 
-    constructor(PriceOracle _priceOracle, BaseRegistrar _registrar) public {
+    constructor(PriceOracle _priceOracle, BaseRegistrar _registrar, address _ratifier) public {
         priceOracle = _priceOracle;
         registrar = _registrar;
+        ratifier = _ratifier;
+        phase = Phase.OPEN;
+    }
+
+    modifier inPhase(Phase p) {
+        require(phase == p, "Not in required phase");
+        _;
     }
 
     /**
@@ -60,8 +84,8 @@ contract ShortNameClaims is Ownable {
      * @param claimant The address making the claim.
      * @return The claim ID.
      */
-    function computeClaimId(string memory claimed, bytes memory dnsname, address claimant) public pure returns(bytes32) {
-        return keccak256(abi.encodePacked(keccak256(bytes(claimed)), keccak256(dnsname), claimant));
+    function computeClaimId(string memory claimed, bytes memory dnsname, address claimant, string memory email) public pure returns(bytes32) {
+        return keccak256(abi.encodePacked(keccak256(bytes(claimed)), keccak256(dnsname), claimant, keccak256(bytes(email))));
     }
 
     /**
@@ -82,14 +106,15 @@ contract ShortNameClaims is Ownable {
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
      * @param claimant The address of the claimant.
+     * @param email An email address for correspondence regarding the claim.
      */
-    function submitExactClaim(bytes memory name, address claimant) public payable {
+    function submitExactClaim(bytes memory name, address claimant, string memory email) public payable {
         string memory claimed = getLabel(name, 0);
-        handleClaim(claimed, name, claimant);
+        handleClaim(claimed, name, claimant, email);
     }
 
     /**
-     * @dev Submits a claim for an exact match (eg, foo.tv -> footv).
+     * @dev Submits a claim for match on name+tld (eg, foo.tv -> footv).
      *      Claimants must provide an amount of ether equal to 365 days'
      *      registration cost; call `getClaimCost` to determine this amount.
      *      Claimants should supply a little extra in case of variation in price;
@@ -97,8 +122,9 @@ contract ShortNameClaims is Ownable {
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
      * @param claimant The address of the claimant.
+     * @param email An email address for correspondence regarding the claim.
      */
-    function submitCombinedClaim(bytes memory name, address claimant) public payable {
+    function submitCombinedClaim(bytes memory name, address claimant, string memory email) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         bytes memory secondLabel = bytes(getLabel(name, 1));
         Buffer.buffer memory buf;
@@ -106,11 +132,11 @@ contract ShortNameClaims is Ownable {
         buf.append(firstLabel);
         buf.append(secondLabel);
 
-        handleClaim(string(buf.buf), name, claimant);
+        handleClaim(string(buf.buf), name, claimant, email);
     }
 
     /**
-     * @dev Submits a claim for an exact match (eg, fooeth.test -> foo.eth).
+     * @dev Submits a claim for prefix match (eg, fooeth.test -> foo.eth).
      *      Claimants must provide an amount of ether equal to 365 days'
      *      registration cost; call `getClaimCost` to determine this amount.
      *      Claimants should supply a little extra in case of variation in price;
@@ -118,44 +144,155 @@ contract ShortNameClaims is Ownable {
      * @param name The DNS-encoded name of the domain being used to support the
      *             claim.
      * @param claimant The address of the claimant.
+     * @param email An email address for correspondence regarding the claim.
      */
-    function submitPrefixClaim(bytes memory name, address claimant) public payable {
+    function submitPrefixClaim(bytes memory name, address claimant, string memory email) public payable {
         bytes memory firstLabel = bytes(getLabel(name, 0));
         require(firstLabel.equals(firstLabel.length - 3, bytes("eth")));
-        handleClaim(string(firstLabel.substring(0, firstLabel.length - 3)), name, claimant);
+        handleClaim(string(firstLabel.substring(0, firstLabel.length - 3)), name, claimant, email);
     }
 
-    function approveClaim(bytes32 claimId) onlyOwner public {
+    /**
+     * @dev Closes the claim submission period.
+     *      Callable only by the owner.
+     */
+    function closeClaims() external onlyOwner inPhase(Phase.OPEN) {
+        phase = Phase.REVIEW;
+    }
+
+    /**
+     * @dev Ratifies the current set of claims.
+     *      Ratification freezes the claims and their resolutions, and permits
+     *      them to be acted on.
+     */
+    function ratifyClaims() external inPhase(Phase.REVIEW) {
+        // Only the ratifier can ratify.
+        require(msg.sender == ratifier);
+        // Can't ratify until all claims have a resolution.
+        require(pendingClaims == 0);
+        phase = Phase.FINAL;
+    }
+
+    /**
+     * @dev Cleans up the contract, after all claims are resolved.
+     *      Callable only by the owner, and only in final state.
+     */
+    function destroy() external onlyOwner inPhase(Phase.FINAL) {
+        require(unresolvedClaims == 0);
+        selfdestruct(toPayable(ratifier));
+    }
+
+    /**
+     * @dev Sets the status of a claim to either APPROVED or DECLINED.
+     *      Callable only during the review phase, and only by the owner or
+     *      ratifier.
+     * @param claimId The claim to set the status of.
+     * @param approved True if the claim is approved, false if it is declined.
+     */
+    function setClaimStatus(bytes32 claimId, bool approved) public inPhase(Phase.REVIEW) {
+        // Only callable by owner or ratifier
+        require(msg.sender == owner() || msg.sender == ratifier);
+
         Claim memory claim = claims[claimId];
         require(claim.paid > 0, "Claim not found");
 
-        claimCount--;
-        delete claims[claimId];
-        emit ClaimApproved(claimId);
+        if(claim.status == Status.PENDING) {
+          // Claim went from pending -> approved/declined; update counters
+          pendingClaims--;
+          unresolvedClaims++;
+        } else if(claim.status == Status.APPROVED) {
+          // Claim was previously approved; remove from approved map
+          approvedNames[claim.labelHash] = false;
+        }
 
-        registrar.register(uint256(claim.labelHash), claim.claimant, REGISTRATION_PERIOD);
-        address(uint160(registrar.owner())).transfer(claim.paid);
+        // Claim was just approved; check the name was not already used, and add
+        // to approved map
+        if(approved) {
+          require(!approvedNames[claim.labelHash]);
+          approvedNames[claim.labelHash] = true;
+        }
+
+        Status status = approved?Status.APPROVED:Status.DECLINED;
+        claims[claimId].status = status;
+        emit ClaimStatusChanged(claimId, status);
     }
 
-    function declineClaim(bytes32 claimId) public {
-        // Only callable by contract owner or claimant
-        require(msg.sender == owner() || msg.sender == claims[claimId].claimant);
+    /**
+     * @dev Sets the status of multiple claims. Callable only during the review
+     *      phase, and only by the owner or ratifier.
+     * @param approved A list of approved claim IDs.
+     * @param declined A list of declined claim IDs.
+     */
+    function setClaimStatuses(bytes32[] calldata approved, bytes32[] calldata declined) external {
+        for(uint i = 0; i < approved.length; i++) {
+            setClaimStatus(approved[i], true);
+        }
+        for(uint i = 0; i < declined.length; i++) {
+            setClaimStatus(declined[i], false);
+        }
+    }
 
+    /**
+     * @dev Resolves a claim. Callable by anyone, only in the final phase.
+     *      Resolving a claim either registers the name or refunds the claimant.
+     * @param claimId The claim ID to resolve.
+     */
+    function resolveClaim(bytes32 claimId) public inPhase(Phase.FINAL) {
         Claim memory claim = claims[claimId];
         require(claim.paid > 0, "Claim not found");
 
-        claimCount--;
-        delete claims[claimId];
-        emit ClaimDeclined(claimId);
+        if(claim.status == Status.APPROVED) {
+            registrar.register(uint256(claim.labelHash), claim.claimant, REGISTRATION_PERIOD);
+            toPayable(registrar.owner()).transfer(claim.paid);
+        } else if(claim.status == Status.DECLINED) {
+            toPayable(claim.claimant).transfer(claim.paid);
+        } else {
+            // It should not be possible to get to FINAL with claim IDs that are
+            // not either APPROVED or DECLINED.
+            assert(false);
+        }
 
-        address(uint160(claim.claimant)).transfer(claim.paid);
+        unresolvedClaims--;
+        delete claims[claimId];
     }
 
-    function handleClaim(string memory claimed, bytes memory name, address claimant) internal {
+    /**
+     * @dev Resolves multiple claims. Callable by anyone, only in the final phase.
+     * @param claimIds A list of claim IDs to resolve.
+     */
+    function resolveClaims(bytes32[] calldata claimIds) external {
+        for(uint i = 0; i < claimIds.length; i++) {
+            resolveClaim(claimIds[i]);
+        }
+    }
+
+    /**
+     * @dev Withdraws a claim and refunds the claimant.
+     *      Callable only by the claimant, at any time.
+     * @param claimId The ID of the claim to withdraw.
+     */
+    function withdrawClaim(bytes32 claimId) external {
+        Claim memory claim = claims[claimId];
+
+        // Only callable by claimant
+        require(msg.sender == claim.claimant);
+
+        if(claim.status == Status.PENDING) {
+            pendingClaims--;
+        } else {
+            unresolvedClaims--;
+        }
+
+        toPayable(claim.claimant).transfer(claim.paid);
+        emit ClaimStatusChanged(claimId, Status.WITHDRAWN);
+        delete claims[claimId];
+    }
+
+    function handleClaim(string memory claimed, bytes memory name, address claimant, string memory email) internal inPhase(Phase.OPEN) {
         uint len = claimed.strlen();
         require(len >= 3 && len <= 6);
 
-        bytes32 claimId = computeClaimId(claimed, name, claimant);
+        bytes32 claimId = computeClaimId(claimed, name, claimant, email);
         require(claims[claimId].paid == 0, "Claim already submitted");
 
         // Require that there are at most two labels (name.tld)
@@ -167,9 +304,9 @@ contract ShortNameClaims is Ownable {
             msg.sender.transfer(msg.value - price);
         }
 
-        claims[claimId] = Claim(keccak256(bytes(claimed)), claimant, price);
-        claimCount++;
-        emit ClaimSubmitted(claimed, name, price, claimant);
+        claims[claimId] = Claim(keccak256(bytes(claimed)), claimant, price, Status.PENDING);
+        pendingClaims++;
+        emit ClaimSubmitted(claimed, name, price, claimant, email);
     }
 
     function getLabel(bytes memory name, uint idx) internal pure returns(string memory) {
@@ -184,5 +321,9 @@ contract ShortNameClaims is Ownable {
         if(offset >= name.length) return '';
         uint len = name.readUint8(offset);
         return string(name.substring(offset + 1, len));
+    }
+
+    function toPayable(address addr) internal pure returns(address payable) {
+        return address(uint160(addr));
     }
 }
