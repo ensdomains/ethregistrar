@@ -6,7 +6,7 @@ import "./PriceOracle.sol";
 
 import "@ensdomains/buffer/contracts/Buffer.sol";
 import "@ensdomains/dnssec-oracle/contracts/BytesUtils.sol";
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "openzeppelin-solidity/contracts/access/Roles.sol";
 
 /**
  * @dev ShortNameClaims is a contract that permits people to register claims
@@ -25,7 +25,9 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
  *      is registered for the claimant for 365 days. If the claim is declined,
  *      the deposit will be returned.
  */
-contract ShortNameClaims is Ownable {
+contract ShortNameClaims {
+    using Roles for Roles.Role;
+
     uint constant public REGISTRATION_PERIOD = 31536000;
 
     using Buffer for Buffer.buffer;
@@ -52,6 +54,9 @@ contract ShortNameClaims is Ownable {
         Status status;
     }
 
+    Roles.Role owners;
+    Roles.Role ratifiers;
+
     PriceOracle public priceOracle;
     BaseRegistrar public registrar;
     mapping(bytes32=>Claim) public claims;
@@ -59,7 +64,6 @@ contract ShortNameClaims is Ownable {
     uint public pendingClaims;
     uint public unresolvedClaims;
     Phase public phase;
-    address public ratifier;
 
     event ClaimSubmitted(string claimed, bytes dnsname, uint paid, address claimant, string email);
     event ClaimStatusChanged(bytes32 indexed claimId, Status status);
@@ -67,13 +71,41 @@ contract ShortNameClaims is Ownable {
     constructor(PriceOracle _priceOracle, BaseRegistrar _registrar, address _ratifier) public {
         priceOracle = _priceOracle;
         registrar = _registrar;
-        ratifier = _ratifier;
         phase = Phase.OPEN;
+
+        owners.add(msg.sender);
+        ratifiers.add(_ratifier);
+    }
+
+    modifier onlyOwner() {
+        require(owners.has(msg.sender), "Caller must be an owner");
+        _;
+    }
+
+    modifier onlyRatifier() {
+        require(ratifiers.has(msg.sender), "Caller must be a ratifier");
+        _;
     }
 
     modifier inPhase(Phase p) {
         require(phase == p, "Not in required phase");
         _;
+    }
+
+    function addOwner(address owner) external onlyOwner {
+        owners.add(owner);
+    }
+
+    function removeOwner(address owner) external onlyOwner {
+        owners.remove(owner);
+    }
+
+    function addRatifier(address ratifier) external onlyRatifier {
+        ratifiers.add(ratifier);
+    }
+
+    function removeRatifier(address ratifier) external onlyRatifier {
+        ratifiers.remove(ratifier);
     }
 
     /**
@@ -165,9 +197,7 @@ contract ShortNameClaims is Ownable {
      *      Ratification freezes the claims and their resolutions, and permits
      *      them to be acted on.
      */
-    function ratifyClaims() external inPhase(Phase.REVIEW) {
-        // Only the ratifier can ratify.
-        require(msg.sender == ratifier);
+    function ratifyClaims() external onlyRatifier inPhase(Phase.REVIEW) {
         // Can't ratify until all claims have a resolution.
         require(pendingClaims == 0);
         phase = Phase.FINAL;
@@ -179,7 +209,7 @@ contract ShortNameClaims is Ownable {
      */
     function destroy() external onlyOwner inPhase(Phase.FINAL) {
         require(unresolvedClaims == 0);
-        selfdestruct(toPayable(ratifier));
+        selfdestruct(toPayable(msg.sender));
     }
 
     /**
@@ -191,7 +221,7 @@ contract ShortNameClaims is Ownable {
      */
     function setClaimStatus(bytes32 claimId, bool approved) public inPhase(Phase.REVIEW) {
         // Only callable by owner or ratifier
-        require(msg.sender == owner() || msg.sender == ratifier);
+        require(owners.has(msg.sender) || ratifiers.has(msg.sender));
 
         Claim memory claim = claims[claimId];
         require(claim.paid > 0, "Claim not found");
