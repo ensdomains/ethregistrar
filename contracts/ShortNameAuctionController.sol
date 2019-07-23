@@ -36,13 +36,16 @@ contract ShortNameAuctionController {
     }
 
     function available(string memory name) public view returns(bool) {
-        bytes32 label = keccak256(bytes(name));
-        return valid(name) && base.available(uint256(label));
+        return valid(name) && base.available(getTokenId(name));
     }
 
     function register(string calldata name, address owner) external onlyOpensea {
         require(available(name));
-        base.register(uint256(keccak256(bytes(name))), owner, REGISTRATION_PERIOD);
+        base.register(getTokenId(name), owner, REGISTRATION_PERIOD);
         emit NameRegistered(name, owner);
+    }
+
+    function getTokenId(string memory name) internal pure returns(uint256) {
+        return uint256(keccak256(bytes(name)));
     }
 }
