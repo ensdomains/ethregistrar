@@ -8,7 +8,7 @@ interface ProxyRegistry {
     function proxies(address owner) external view returns(address);
 }
 
-contract ShortNameAuctionController {
+contract ShortNameAuctionController is Ownable {
     using StringUtils for *;
 
     uint constant public REGISTRATION_PERIOD = 31536000;
@@ -43,6 +43,10 @@ contract ShortNameAuctionController {
         require(available(name));
         base.register(getTokenId(name), owner, REGISTRATION_PERIOD);
         emit NameRegistered(name, owner);
+    }
+
+    function setOpensea(address _opensea) external onlyOwner {
+        opensea = _opensea;
     }
 
     function getTokenId(string memory name) internal pure returns(uint256) {
