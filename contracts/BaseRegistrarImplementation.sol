@@ -3,9 +3,10 @@ pragma solidity ^0.5.0;
 import "@ensdomains/ens/contracts/ENS.sol";
 import "@ensdomains/ens/contracts/Registrar.sol";
 import "@ensdomains/ens/contracts/HashRegistrar.sol";
+import "openzeppelin-solidity/contracts/token/ERC721/ERC721.sol";
 import "./BaseRegistrar.sol";
 
-contract BaseRegistrarImplementation is BaseRegistrar {
+contract BaseRegistrarImplementation is BaseRegistrar, ERC721 {
     // A map of expiry times
     mapping(uint256=>uint) expiries;
 
