@@ -1,5 +1,6 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
+const PublicResolver = artifacts.require('@ensdomains/resolver/PublicResolver');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
 const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
@@ -38,6 +39,7 @@ async function expectFailure(call) {
 
 contract('ETHRegistrarController', function (accounts) {
 	let ens;
+	let resolver;
 	let baseRegistrar;
 	let interimRegistrar;
 	let controller;
@@ -64,6 +66,8 @@ contract('ETHRegistrarController', function (accounts) {
 
 	before(async () => {
 		ens = await ENS.new();
+
+		resolver = await PublicResolver.new(ens.address);
 
 		interimRegistrar = await HashRegistrar.new(ens.address, namehash.hash('eth'), 1493895600);
 		await ens.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
@@ -134,6 +138,25 @@ contract('ETHRegistrarController', function (accounts) {
 			assert.equal(tx.logs[0].args.name, "newname");
 			assert.equal(tx.logs[0].args.owner, registrantAccount);
 			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 28 * DAYS);
+		});
+
+		it('should permit new registrations with config', async () => {
+			var commitment = await controller.makeCommitmentWithConfig("newconfigname", registrantAccount, secret, resolver.address, registrantAccount);
+			var tx = await controller.commit(commitment);
+			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
+
+			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			var balanceBefore = await web3.eth.getBalance(controller.address);
+			var tx = await controller.registerWithConfig("newconfigname", registrantAccount, 28 * DAYS, secret, resolver.address, registrantAccount, {value: 28 * DAYS + 1, gasPrice: 0});
+			assert.equal(tx.logs.length, 1);
+			assert.equal(tx.logs[0].event, "NameRegistered");
+			assert.equal(tx.logs[0].args.name, "newconfigname");
+			assert.equal(tx.logs[0].args.owner, registrantAccount);
+			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 28 * DAYS);
+
+			var nodehash = namehash.hash("newconfigname.eth");
+			assert.equal((await ens.resolver(nodehash)), resolver.address);
+			assert.equal((await resolver.addr(nodehash)), registrantAccount);
 		});
 
 		it('should include the owner in the commitment', async () => {

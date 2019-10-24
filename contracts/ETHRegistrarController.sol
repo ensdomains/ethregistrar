@@ -4,6 +4,7 @@ import "./PriceOracle.sol";
 import "./BaseRegistrar.sol";
 import "./StringUtils.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "@ensdomains/resolver/contracts/Resolver.sol";
 
 /**
  * @dev A registrar controller for registering and renewing names at fixed cost.
@@ -21,6 +22,9 @@ contract ETHRegistrarController is Ownable {
         keccak256("commit(bytes32)") ^
         keccak256("register(string,address,uint256,bytes32)") ^
         keccak256("renew(string,uint256)")
+    );
+    bytes4 constant private COMMITMENT_WITH_CONFIG_CONTROLLER_ID = bytes4(
+        keccak256("registerWithConfig(string,address,uint256,bytes32,address,address)")
     );
 
     BaseRegistrar base;
@@ -48,7 +52,7 @@ contract ETHRegistrarController is Ownable {
         return prices.price(name, base.nameExpires(uint256(hash)), duration);
     }
 
-    function valid(string memory name) public view returns(bool) {
+    function valid(string memory name) public pure returns(bool) {
         return name.strlen() >= 3;
     }
 
@@ -62,14 +66,18 @@ contract ETHRegistrarController is Ownable {
         return keccak256(abi.encodePacked(label, owner, secret));
     }
 
+    function makeCommitmentWithConfig(string memory name, address owner, bytes32 secret, address resolver, address addr) pure public returns(bytes32) {
+        bytes32 label = keccak256(bytes(name));
+        return keccak256(abi.encodePacked(label, owner, secret, resolver, addr));
+    }
+
     function commit(bytes32 commitment) public {
         require(commitments[commitment] + maxCommitmentAge < now);
         commitments[commitment] = now;
     }
 
-    function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
+    function _invalidateCommitment(string memory name, uint duration, bytes32 commitment) internal returns (uint256) {
         // Require a valid commitment
-        bytes32 commitment = makeCommitment(name, owner, secret);
         require(commitments[commitment] + minCommitmentAge <= now);
 
         // If the commitment is too old, or the name is registered, stop
@@ -82,10 +90,48 @@ contract ETHRegistrarController is Ownable {
         require(duration >= MIN_REGISTRATION_DURATION);
         require(msg.value >= cost);
 
+        return cost;
+    }
+
+    function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
+        bytes32 commitment = makeCommitment(name, owner, secret);
+        uint cost = _invalidateCommitment(name, duration, commitment);
+
         bytes32 label = keccak256(bytes(name));
         uint expires = base.register(uint256(label), owner, duration);
         emit NameRegistered(name, label, owner, cost, expires);
 
+        if(msg.value > cost) {
+            msg.sender.transfer(msg.value - cost);
+        }
+    }
+
+    function registerWithConfig(string calldata name, address owner, uint duration, bytes32 secret, address resolver, address addr) external payable {
+        bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, resolver, addr);
+        uint cost = _invalidateCommitment(name, duration, commitment);
+
+        bytes32 label = keccak256(bytes(name));
+        uint256 tokenId = uint256(label);
+
+        // Set this contract as the (temporary) owner, giving it
+        // permission to set up the resolver.
+        uint expires = base.register(tokenId, address(this), duration);
+
+        // The nodehash of this label
+        bytes32 nodehash = keccak256(abi.encodePacked(base.baseNode(), label));
+
+        // Set the resolver
+        base.ens().setResolver(nodehash, resolver);
+
+        // Configure the resolver
+        Resolver(resolver).setAddr(nodehash, addr);
+
+        // Now transfer full ownership to the expeceted owner
+        base.transferFrom(address(this), owner, tokenId);
+
+        emit NameRegistered(name, label, owner, cost, expires);
+
+        // Refund any extra payment
         if(msg.value > cost) {
             msg.sender.transfer(msg.value - cost);
         }
@@ -121,6 +167,7 @@ contract ETHRegistrarController is Ownable {
 
     function supportsInterface(bytes4 interfaceID) external pure returns (bool) {
         return interfaceID == INTERFACE_META_ID ||
-               interfaceID == COMMITMENT_CONTROLLER_ID;
+               interfaceID == COMMITMENT_CONTROLLER_ID ||
+               interfaceID == COMMITMENT_WITH_CONFIG_CONTROLLER_ID;
     }
 }
