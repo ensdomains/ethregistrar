@@ -83,6 +83,36 @@ contract('ETHRegistrarController', function (accounts) {
 			await baseRegistrar.addController(controller.address, {from: ownerAccount});
 		});
 
+		const checkLabels = {
+		    "testing": true,
+		    "longname12345678": true,
+		    "sixsix": true,
+		    "five5": true,
+		    "four": true,
+		    "iii": true,
+		    "ii": false,
+		    "i": false,
+		    "": false,
+
+		    // { ni } { hao } { ma } (chinese; simplified)
+		    "\u4f60\u597d\u5417": true,
+
+		    // { ta } { ko } (japanese; hiragana)
+		    "\u305f\u3053": false,
+
+		    // { poop } { poop } { poop } (emoji)
+		    "\ud83d\udca9\ud83d\udca9\ud83d\udca9": true,
+
+		    // { poop } { poop } (emoji)
+		    "\ud83d\udca9\ud83d\udca9": false
+		};
+
+		it('should report label validity', async () => {
+		    for (const label in checkLabels) {
+		        assert.equal(await controller.valid(label), checkLabels[label], label);
+		    }
+		});
+
 		it('should report unused names as available', async () => {
 			assert.equal(await controller.available(sha3('available')), true);
 		});
