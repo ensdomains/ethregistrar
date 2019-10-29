@@ -23,8 +23,10 @@ contract ETHRegistrarController is Ownable {
         keccak256("register(string,address,uint256,bytes32)") ^
         keccak256("renew(string,uint256)")
     );
+
     bytes4 constant private COMMITMENT_WITH_CONFIG_CONTROLLER_ID = bytes4(
-        keccak256("registerWithConfig(string,address,uint256,bytes32,address,address)")
+        keccak256("registerWithConfig(string,address,uint256,bytes32,address,address)") ^
+        keccak256("makeCommitmentWithConfig(string,address,bytes32,address,address)")
     );
 
     BaseRegistrar base;
@@ -62,12 +64,14 @@ contract ETHRegistrarController is Ownable {
     }
 
     function makeCommitment(string memory name, address owner, bytes32 secret) pure public returns(bytes32) {
-        bytes32 label = keccak256(bytes(name));
-        return keccak256(abi.encodePacked(label, owner, secret));
+        return makeCommitmentWithConfig(name, owner, secret, address(0), address(0));
     }
 
     function makeCommitmentWithConfig(string memory name, address owner, bytes32 secret, address resolver, address addr) pure public returns(bytes32) {
         bytes32 label = keccak256(bytes(name));
+        if (resolver == address(0) && addr == address(0)) {
+            return keccak256(abi.encodePacked(label, owner, secret));
+        }
         return keccak256(abi.encodePacked(label, owner, secret, resolver, addr));
     }
 
