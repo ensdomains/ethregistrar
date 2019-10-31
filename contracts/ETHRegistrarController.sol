@@ -80,7 +80,7 @@ contract ETHRegistrarController is Ownable {
         commitments[commitment] = now;
     }
 
-    function _invalidateCommitment(string memory name, uint duration, bytes32 commitment) internal returns (uint256) {
+    function _consumeCommitment(string memory name, uint duration, bytes32 commitment) internal returns (uint256) {
         // Require a valid commitment
         require(commitments[commitment] + minCommitmentAge <= now);
 
@@ -98,8 +98,8 @@ contract ETHRegistrarController is Ownable {
     }
 
     function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
-        bytes32 commitment = makeCommitment(name, owner, secret);
-        uint cost = _invalidateCommitment(name, duration, commitment);
+        bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, address(0), address(0));
+        uint cost = _consumeCommitment(name, duration, commitment);
 
         bytes32 label = keccak256(bytes(name));
         uint expires = base.register(uint256(label), owner, duration);
@@ -112,7 +112,7 @@ contract ETHRegistrarController is Ownable {
 
     function registerWithConfig(string calldata name, address owner, uint duration, bytes32 secret, address resolver, address addr) external payable {
         bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, resolver, addr);
-        uint cost = _invalidateCommitment(name, duration, commitment);
+        uint cost = _consumeCommitment(name, duration, commitment);
 
         bytes32 label = keccak256(bytes(name));
         uint256 tokenId = uint256(label);
@@ -128,7 +128,9 @@ contract ETHRegistrarController is Ownable {
         base.ens().setResolver(nodehash, resolver);
 
         // Configure the resolver
-        Resolver(resolver).setAddr(nodehash, addr);
+        if (addr != address(0)) {
+            Resolver(resolver).setAddr(nodehash, addr);
+        }
 
         // Now transfer full ownership to the expeceted owner
         base.transferFrom(address(this), owner, tokenId);
