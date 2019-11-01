@@ -80,23 +80,6 @@ contract ETHRegistrarController is Ownable {
         commitments[commitment] = now;
     }
 
-    function _consumeCommitment(string memory name, uint duration, bytes32 commitment) internal returns (uint256) {
-        // Require a valid commitment
-        require(commitments[commitment] + minCommitmentAge <= now);
-
-        // If the commitment is too old, or the name is registered, stop
-        require(commitments[commitment] + maxCommitmentAge > now);
-        require(available(name));
-
-        delete(commitments[commitment]);
-
-        uint cost = rentPrice(name, duration);
-        require(duration >= MIN_REGISTRATION_DURATION);
-        require(msg.value >= cost);
-
-        return cost;
-    }
-
     function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
         bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, address(0), address(0));
         uint cost = _consumeCommitment(name, duration, commitment);
@@ -175,5 +158,22 @@ contract ETHRegistrarController is Ownable {
         return interfaceID == INTERFACE_META_ID ||
                interfaceID == COMMITMENT_CONTROLLER_ID ||
                interfaceID == COMMITMENT_WITH_CONFIG_CONTROLLER_ID;
+    }
+
+    function _consumeCommitment(string memory name, uint duration, bytes32 commitment) internal returns (uint256) {
+        // Require a valid commitment
+        require(commitments[commitment] + minCommitmentAge <= now);
+
+        // If the commitment is too old, or the name is registered, stop
+        require(commitments[commitment] + maxCommitmentAge > now);
+        require(available(name));
+
+        delete(commitments[commitment]);
+
+        uint cost = rentPrice(name, duration);
+        require(duration >= MIN_REGISTRATION_DURATION);
+        require(msg.value >= cost);
+
+        return cost;
     }
 }
