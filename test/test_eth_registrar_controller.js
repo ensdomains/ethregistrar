@@ -1,5 +1,6 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
+const PublicResolver = artifacts.require('@ensdomains/resolver/PublicResolver');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
 const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
@@ -38,6 +39,7 @@ async function expectFailure(call) {
 
 contract('ETHRegistrarController', function (accounts) {
 	let ens;
+	let resolver;
 	let baseRegistrar;
 	let interimRegistrar;
 	let controller;
@@ -65,6 +67,8 @@ contract('ETHRegistrarController', function (accounts) {
 	before(async () => {
 		ens = await ENS.new();
 
+		resolver = await PublicResolver.new(ens.address);
+
 		interimRegistrar = await HashRegistrar.new(ens.address, namehash.hash('eth'), 1493895600);
 		await ens.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
 		await registerOldNames(['name', 'name2'], registrantAccount);
@@ -81,6 +85,36 @@ contract('ETHRegistrarController', function (accounts) {
 			86400,
 			{from: ownerAccount});
 			await baseRegistrar.addController(controller.address, {from: ownerAccount});
+		});
+
+		const checkLabels = {
+		    "testing": true,
+		    "longname12345678": true,
+		    "sixsix": true,
+		    "five5": true,
+		    "four": true,
+		    "iii": true,
+		    "ii": false,
+		    "i": false,
+		    "": false,
+
+		    // { ni } { hao } { ma } (chinese; simplified)
+		    "\u4f60\u597d\u5417": true,
+
+		    // { ta } { ko } (japanese; hiragana)
+		    "\u305f\u3053": false,
+
+		    // { poop } { poop } { poop } (emoji)
+		    "\ud83d\udca9\ud83d\udca9\ud83d\udca9": true,
+
+		    // { poop } { poop } (emoji)
+		    "\ud83d\udca9\ud83d\udca9": false
+		};
+
+		it('should report label validity', async () => {
+		    for (const label in checkLabels) {
+		        assert.equal(await controller.valid(label), checkLabels[label], label);
+		    }
 		});
 
 		it('should report unused names as available', async () => {
@@ -104,6 +138,25 @@ contract('ETHRegistrarController', function (accounts) {
 			assert.equal(tx.logs[0].args.name, "newname");
 			assert.equal(tx.logs[0].args.owner, registrantAccount);
 			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 28 * DAYS);
+		});
+
+		it('should permit new registrations with config', async () => {
+			var commitment = await controller.makeCommitmentWithConfig("newconfigname", registrantAccount, secret, resolver.address, registrantAccount);
+			var tx = await controller.commit(commitment);
+			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
+
+			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			var balanceBefore = await web3.eth.getBalance(controller.address);
+			var tx = await controller.registerWithConfig("newconfigname", registrantAccount, 28 * DAYS, secret, resolver.address, registrantAccount, {value: 28 * DAYS + 1, gasPrice: 0});
+			assert.equal(tx.logs.length, 1);
+			assert.equal(tx.logs[0].event, "NameRegistered");
+			assert.equal(tx.logs[0].args.name, "newconfigname");
+			assert.equal(tx.logs[0].args.owner, registrantAccount);
+			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 28 * DAYS);
+
+			var nodehash = namehash.hash("newconfigname.eth");
+			assert.equal((await ens.resolver(nodehash)), resolver.address);
+			assert.equal((await resolver.addr(nodehash)), registrantAccount);
 		});
 
 		it('should include the owner in the commitment', async () => {
