@@ -72,7 +72,7 @@ contract ETHRegistrarController is Ownable {
         if (resolver == address(0) && addr == address(0)) {
             return keccak256(abi.encodePacked(label, owner, secret));
         }
-        return keccak256(abi.encodePacked(label, owner, secret, resolver, addr));
+        return keccak256(abi.encodePacked(label, owner, resolver, addr, secret));
     }
 
     function commit(bytes32 commitment) public {
