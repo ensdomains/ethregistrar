@@ -72,6 +72,7 @@ contract ETHRegistrarController is Ownable {
         if (resolver == address(0) && addr == address(0)) {
             return keccak256(abi.encodePacked(label, owner, secret));
         }
+        require(resolver != address(0));
         return keccak256(abi.encodePacked(label, owner, resolver, addr, secret));
     }
 

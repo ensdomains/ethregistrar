@@ -12,6 +12,7 @@ const toBN = require('web3-utils').toBN;
 
 const DAYS = 24 * 60 * 60;
 const SALT = sha3('foo');
+const NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 const advanceTime = Promise.promisify(function(delay, done) {
 	web3.currentProvider.send({
@@ -157,6 +158,29 @@ contract('ETHRegistrarController', function (accounts) {
 			var nodehash = namehash.hash("newconfigname.eth");
 			assert.equal((await ens.resolver(nodehash)), resolver.address);
 			assert.equal((await resolver.addr(nodehash)), registrantAccount);
+		});
+
+		it('should not allow a commitment with addr but not resolver', async () => {
+			await expectFailure(controller.makeCommitmentWithConfig("newconfigname2", registrantAccount, secret, NULL_ADDRESS, registrantAccount));
+		});
+
+		it('should permit a registration with resolver but not addr', async () => {
+			var commitment = await controller.makeCommitmentWithConfig("newconfigname2", registrantAccount, secret, resolver.address, NULL_ADDRESS);
+			var tx = await controller.commit(commitment);
+			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
+
+			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			var balanceBefore = await web3.eth.getBalance(controller.address);
+			var tx = await controller.registerWithConfig("newconfigname2", registrantAccount, 28 * DAYS, secret, resolver.address, NULL_ADDRESS, {value: 28 * DAYS + 1, gasPrice: 0});
+			assert.equal(tx.logs.length, 1);
+			assert.equal(tx.logs[0].event, "NameRegistered");
+			assert.equal(tx.logs[0].args.name, "newconfigname2");
+			assert.equal(tx.logs[0].args.owner, registrantAccount);
+			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 28 * DAYS);
+
+			var nodehash = namehash.hash("newconfigname2.eth");
+			assert.equal((await ens.resolver(nodehash)), resolver.address);
+			assert.equal((await resolver.addr(nodehash)), 0);
 		});
 
 		it('should include the owner in the commitment', async () => {
