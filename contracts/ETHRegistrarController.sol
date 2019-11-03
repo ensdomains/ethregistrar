@@ -81,42 +81,39 @@ contract ETHRegistrarController is Ownable {
     }
 
     function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
-        bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, address(0), address(0));
-        uint cost = _consumeCommitment(name, duration, commitment);
-
-        bytes32 label = keccak256(bytes(name));
-        uint expires = base.register(uint256(label), owner, duration);
-        emit NameRegistered(name, label, owner, cost, expires);
-
-        if(msg.value > cost) {
-            msg.sender.transfer(msg.value - cost);
-        }
+      registerWithConfig(name, owner, duration, secret, address(0), address(0));
     }
 
-    function registerWithConfig(string calldata name, address owner, uint duration, bytes32 secret, address resolver, address addr) external payable {
+    function registerWithConfig(string memory name, address owner, uint duration, bytes32 secret, address resolver, address addr) public payable {
         bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, resolver, addr);
         uint cost = _consumeCommitment(name, duration, commitment);
 
         bytes32 label = keccak256(bytes(name));
         uint256 tokenId = uint256(label);
 
-        // Set this contract as the (temporary) owner, giving it
-        // permission to set up the resolver.
-        uint expires = base.register(tokenId, address(this), duration);
+        uint expires;
+        if(resolver != address(0)) {
+            // Set this contract as the (temporary) owner, giving it
+            // permission to set up the resolver.
+            expires = base.register(tokenId, address(this), duration);
 
-        // The nodehash of this label
-        bytes32 nodehash = keccak256(abi.encodePacked(base.baseNode(), label));
+            // The nodehash of this label
+            bytes32 nodehash = keccak256(abi.encodePacked(base.baseNode(), label));
 
-        // Set the resolver
-        base.ens().setResolver(nodehash, resolver);
+            // Set the resolver
+            base.ens().setResolver(nodehash, resolver);
 
-        // Configure the resolver
-        if (addr != address(0)) {
-            Resolver(resolver).setAddr(nodehash, addr);
+            // Configure the resolver
+            if (addr != address(0)) {
+                Resolver(resolver).setAddr(nodehash, addr);
+            }
+
+            // Now transfer full ownership to the expeceted owner
+            base.transferFrom(address(this), owner, tokenId);
+        } else {
+            require(addr == address(0));
+            expires = base.register(tokenId, owner, duration);
         }
-
-        // Now transfer full ownership to the expeceted owner
-        base.transferFrom(address(this), owner, tokenId);
 
         emit NameRegistered(name, label, owner, cost, expires);
 
