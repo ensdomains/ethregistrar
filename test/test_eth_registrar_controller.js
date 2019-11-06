@@ -157,6 +157,7 @@ contract('ETHRegistrarController', function (accounts) {
 
 			var nodehash = namehash.hash("newconfigname.eth");
 			assert.equal((await ens.resolver(nodehash)), resolver.address);
+			assert.equal((await ens.owner(nodehash)), registrantAccount);
 			assert.equal((await resolver.addr(nodehash)), registrantAccount);
 		});
 
