@@ -110,6 +110,7 @@ contract ETHRegistrarController is Ownable {
             }
 
             // Now transfer full ownership to the expeceted owner
+            base.reclaim(tokenId, owner);
             base.transferFrom(address(this), owner, tokenId);
         } else {
             require(addr == address(0));
