@@ -14,17 +14,11 @@ contract BaseRegistrar is IERC721, Ownable {
     event NameRegistered(uint256 indexed id, address indexed owner, uint expires);
     event NameRenewed(uint256 indexed id, uint expires);
 
-    // Expiration timestamp for migrated domains.
-    uint public transferPeriodEnds;
-
     // The ENS registry
     ENS public ens;
 
     // The namehash of the TLD this registrar owns (eg, .eth)
     bytes32 public baseNode;
-
-    // The interim registrar
-    Registrar public previousRegistrar;
 
     // A map of addresses that are authorised to register and renew names.
     mapping(address=>bool) public controllers;
@@ -55,10 +49,4 @@ contract BaseRegistrar is IERC721, Ownable {
      * @dev Reclaim ownership of a name in ENS, if you own it in the registrar.
      */
     function reclaim(uint256 id, address owner) external;
-
-    /**
-     * @dev Transfers a registration from the initial registrar.
-     * This function is called by the initial registrar when a user calls `transferRegistrars`.
-     */
-    function acceptRegistrarTransfer(bytes32 label, Deed deed, uint) external;
 }

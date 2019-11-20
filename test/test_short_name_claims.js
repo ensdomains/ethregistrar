@@ -55,17 +55,13 @@ contract('ShortNameClaims', function (accounts) {
 	const ratifierAccount = accounts[3];
 
 	let ens;
-	let interimRegistrar;
 	let registrar;
 	let claims;
 
 	before(async () => {
 		ens = await ENS.new();
 
-		interimRegistrar = await HashRegistrar.new(ens.address, namehash.hash('eth'), 1493895600);
-
-		const now = (await web3.eth.getBlock('latest')).timestamp;
-		registrar = await BaseRegistrar.new(ens.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
 
 		const priceOracle = await SimplePriceOracle.new(1);

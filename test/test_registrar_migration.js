@@ -75,15 +75,14 @@ contract('RegistrarMigration', function (accounts) {
 		await registerOldNames(oldEns, ['oldname', 'oldname2'], registrantAccount);
 
 		// Create the original 'permanent' registrar and register some names on it
-		const now = (await web3.eth.getBlock('latest')).timestamp;
-		oldRegistrar = await BaseRegistrar.new(oldEns.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		oldRegistrar = await BaseRegistrar.new(oldEns.address, namehash.hash('eth'), {from: ownerAccount});
 		await oldRegistrar.addController(controllerAccount, {from: ownerAccount});
 		await oldEns.setSubnodeOwner('0x0', sha3('eth'), oldRegistrar.address);
 		await Promise.map(["name", "name2"].map(sha3), (label) => oldRegistrar.register(label, registrantAccount, 86400, {from: controllerAccount}));
 
 		// Create the new ENS registry and registrar
 		ens = await ENS.new();
-		registrar = await BaseRegistrar.new(ens.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 		await registrar.addController(controllerAccount, {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
 

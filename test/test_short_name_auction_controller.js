@@ -38,7 +38,6 @@ async function expectFailure(call) {
 contract('ShortNameAuctionController', function (accounts) {
 	let ens;
 	let baseRegistrar;
-	let interimRegistrar;
 	let controller;
 	let priceOracle;
 
@@ -50,10 +49,7 @@ contract('ShortNameAuctionController', function (accounts) {
 	before(async () => {
 		ens = await ENS.new();
 
-		interimRegistrar = await HashRegistrar.new(ens.address, namehash.hash('eth'), 1493895600);
-
-		const now = (await web3.eth.getBlock('latest')).timestamp;
-		baseRegistrar = await BaseRegistrar.new(ens.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		baseRegistrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), baseRegistrar.address);
 
 		const proxy = await DummyProxyRegistry.new(openseaProxyAccount);
