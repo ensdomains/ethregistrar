@@ -1,0 +1,152 @@
+const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
+const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
+const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
+const RegistrarMigration = artifacts.require('./RegistrarMigration');
+var Promise = require('bluebird');
+
+const namehash = require('eth-ens-namehash');
+const sha3 = require('web3-utils').sha3;
+const toBN = require('web3-utils').toBN;
+
+const DAYS = 24 * 60 * 60;
+const SALT = sha3('foo');
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+const advanceTime = Promise.promisify(function(delay, done) {
+	web3.currentProvider.send({
+		jsonrpc: "2.0",
+		"method": "evm_increaseTime",
+		params: [delay]}, done)
+	}
+);
+
+async function expectFailure(call) {
+	let tx;
+	try {
+		tx = await call;
+	} catch (error) {
+		// Assert ganache revert exception
+		assert.equal(
+			error.message,
+			'Returned error: VM Exception while processing transaction: revert'
+		);
+	}
+	if(tx !== undefined) {
+		const receipt = tx.receipt || web3.eth.getTransactionReceipt(tx);
+		assert.equal(parseInt(receipt.status), 0);
+	}
+}
+
+contract('RegistrarMigration', function (accounts) {
+	const ownerAccount = accounts[0];
+	const controllerAccount = accounts[1];
+	const registrantAccount = accounts[2];
+	const otherAccount = accounts[3];
+
+	let oldEns;
+	let ens;
+	let interimRegistrar;
+	let oldRegistrar;
+	let registrar;
+
+	async function registerOldNames(ens, names, account) {
+		var hashes = names.map(sha3);
+		var value = toBN(10000000000000000);
+		var bidHashes = await Promise.map(hashes, (hash) => interimRegistrar.shaBid(hash, account, value, SALT));
+		await interimRegistrar.startAuctions(hashes);
+		await Promise.map(bidHashes, (h) => interimRegistrar.newBid(h, {value: value, from: account}));
+		await advanceTime(3 * DAYS + 1);
+		await Promise.map(hashes, (hash) => interimRegistrar.unsealBid(hash, value, SALT, {from: account}));
+		await advanceTime(2 * DAYS + 1);
+		await Promise.map(hashes, (hash) => interimRegistrar.finalizeAuction(hash, {from: account}));
+		for(var name of names) {
+			assert.equal(await ens.owner(namehash.hash(name + '.eth')), account);
+		}
+	}
+
+	before(async () => {
+		// Create the original ENS registry
+		oldEns = await ENS.new();
+
+		// Create the auction registrar and register some names on it
+		interimRegistrar = await HashRegistrar.new(oldEns.address, namehash.hash('eth'), 1493895600);
+		await oldEns.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
+		await registerOldNames(oldEns, ['oldname', 'oldname2'], registrantAccount);
+
+		// Create the original 'permanent' registrar and register some names on it
+		const now = (await web3.eth.getBlock('latest')).timestamp;
+		oldRegistrar = await BaseRegistrar.new(oldEns.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		await oldRegistrar.addController(controllerAccount, {from: ownerAccount});
+		await oldEns.setSubnodeOwner('0x0', sha3('eth'), oldRegistrar.address);
+		await Promise.map(["name", "name2"].map(sha3), (label) => oldRegistrar.register(label, registrantAccount, 86400, {from: controllerAccount}));
+
+		// Create the new ENS registry and registrar
+		ens = await ENS.new();
+		registrar = await BaseRegistrar.new(ens.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+		await registrar.addController(controllerAccount, {from: ownerAccount});
+		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
+
+		// Create the migration contract. Make it the owner of 'eth' on the old
+		// registry, and a controller of the new registrar.
+		registrarMigration = await RegistrarMigration.new(oldRegistrar.address, registrar.address);
+		await registrar.addController(registrarMigration.address, {from: ownerAccount});
+		await oldEns.setSubnodeOwner('0x0', sha3('eth'), registrarMigration.address);
+	});
+
+	// it('should allow transfers from the auction registrar', async () => {
+	// 	await advanceTime((await registrar.MIGRATION_LOCK_PERIOD()).toNumber());
+	//
+	// 	var balanceBefore = await web3.eth.getBalance(registrantAccount);
+	// 	await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
+	// 	assert.equal(await registrar.ownerOf(sha3("name")), registrantAccount);
+	// 	assert.equal((await (registrar.nameExpires(sha3("name")))).toNumber(), (await registrar.transferPeriodEnds()).toNumber());
+	// });
+
+	it('should still permit transfers on the old registrar', async () => {
+		await oldRegistrar.transferFrom(registrantAccount, otherAccount, sha3("name"), {from: registrantAccount});
+		assert.equal((await oldRegistrar.ownerOf(sha3("name"))), otherAccount);
+		await oldRegistrar.transferFrom(otherAccount, registrantAccount, sha3("name"), {from: otherAccount});
+	});
+
+	it('should permit anyone to migrate a name', async () => {
+		await oldEns.setResolver(namehash.hash("name.eth"), otherAccount, {from: registrantAccount});
+		await oldEns.setTTL(namehash.hash("name.eth"), 123, {from: registrantAccount});
+
+		let tx = await registrarMigration.migrate(sha3("name"), {from: otherAccount});
+		assert.equal(tx.receipt.status, 1);
+
+		// New registrar should have owner and expiry date set correctly
+		assert.equal(await registrar.ownerOf(sha3("name")), registrantAccount);
+		assert.equal((await oldRegistrar.nameExpires(sha3("name"))).toString(), (await registrar.nameExpires(sha3("name"))).toString());
+
+		// Old registry ownership should be set to the migration contract
+		assert.equal(await oldEns.owner(namehash.hash("name.eth")), registrarMigration.address);
+
+		// New registry ownership, resolver and TTL should be set correctly
+		assert.equal(await ens.owner(namehash.hash("name.eth")), registrantAccount);
+
+		assert.equal(await ens.resolver(namehash.hash("name.eth")), otherAccount);
+		assert.equal(await ens.ttl(namehash.hash("name.eth")), 123);
+	});
+
+	it('should not update the registry for names controlled by contracts', async () => {
+		await oldEns.setOwner(namehash.hash("name2.eth"), oldEns.address, {from: registrantAccount});
+
+		let tx = await registrarMigration.migrate(sha3("name2"), {from: otherAccount});
+		assert.equal(tx.receipt.status, 1);
+
+		// New registrar should have owner and expiry date set correctly
+		assert.equal(await registrar.ownerOf(sha3("name2")), registrantAccount);
+		assert.equal((await oldRegistrar.nameExpires(sha3("name2"))).toString(), (await registrar.nameExpires(sha3("name"))).toString());
+
+		// Old registry ownership should be unchanged
+		assert.equal(await oldEns.owner(namehash.hash("name2.eth")), oldEns.address);
+
+		// New registry ownership, resolver and TTL should be unmodified
+		assert.equal(await ens.owner(namehash.hash("name2.eth")), ZERO_ADDRESS);
+
+		assert.equal(await ens.resolver(namehash.hash("name2.eth")), ZERO_ADDRESS);
+		assert.equal(await ens.ttl(namehash.hash("name2.eth")), 0);
+	});
+});
