@@ -93,14 +93,12 @@ contract('RegistrarMigration', function (accounts) {
 		await oldEns.setSubnodeOwner('0x0', sha3('eth'), registrarMigration.address);
 	});
 
-	// it('should allow transfers from the auction registrar', async () => {
-	// 	await advanceTime((await registrar.MIGRATION_LOCK_PERIOD()).toNumber());
-	//
-	// 	var balanceBefore = await web3.eth.getBalance(registrantAccount);
-	// 	await interimRegistrar.transferRegistrars(sha3('name'), {gasPrice: 0, from: registrantAccount});
-	// 	assert.equal(await registrar.ownerOf(sha3("name")), registrantAccount);
-	// 	assert.equal((await (registrar.nameExpires(sha3("name")))).toNumber(), (await registrar.transferPeriodEnds()).toNumber());
-	// });
+	it('should allow auction registrar names to be released', async () => {
+		var balanceBefore = await web3.eth.getBalance(registrantAccount);
+		await interimRegistrar.releaseDeed(sha3('oldname'), {gasPrice: 0, from: registrantAccount});
+		var balanceAfter = await web3.eth.getBalance(registrantAccount);
+		assert.equal(balanceAfter - balanceBefore, 10000000000000000);
+	});
 
 	it('should still permit transfers on the old registrar', async () => {
 		await oldRegistrar.transferFrom(registrantAccount, otherAccount, sha3("name"), {from: registrantAccount});
