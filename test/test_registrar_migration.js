@@ -1,6 +1,7 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
+const OldBaseRegistrar = artifacts.require('./OldBaseRegistrarImplementation');
 const RegistrarMigration = artifacts.require('./RegistrarMigration');
 var Promise = require('bluebird');
 
@@ -49,6 +50,7 @@ contract('RegistrarMigration', function (accounts) {
 	let interimRegistrar;
 	let oldRegistrar;
 	let registrar;
+	let transferPeriodEnds;
 
 	async function registerOldNames(ens, names, account) {
 		var hashes = names.map(sha3);
@@ -75,7 +77,8 @@ contract('RegistrarMigration', function (accounts) {
 		await registerOldNames(oldEns, ['oldname', 'oldname2'], registrantAccount);
 
 		// Create the original 'permanent' registrar and register some names on it
-		oldRegistrar = await BaseRegistrar.new(oldEns.address, namehash.hash('eth'), {from: ownerAccount});
+		transferPeriodEnds = (await web3.eth.getBlock('latest')).timestamp + 365 * DAYS;
+		oldRegistrar = await OldBaseRegistrar.new(oldEns.address, interimRegistrar.address, namehash.hash('eth'), transferPeriodEnds, {from: ownerAccount});
 		await oldRegistrar.addController(controllerAccount, {from: ownerAccount});
 		await oldEns.setSubnodeOwner('0x0', sha3('eth'), oldRegistrar.address);
 		await Promise.map(["name", "name2"].map(sha3), (label) => oldRegistrar.register(label, registrantAccount, 86400, {from: controllerAccount}));
@@ -93,7 +96,28 @@ contract('RegistrarMigration', function (accounts) {
 		await oldEns.setSubnodeOwner('0x0', sha3('eth'), registrarMigration.address);
 	});
 
-	it('should allow auction registrar names to be released', async () => {
+	it('should allow auction registrar names to be migrated', async () => {
+		await oldEns.setResolver(namehash.hash("oldname.eth"), otherAccount, {from: registrantAccount});
+		await oldEns.setTTL(namehash.hash("oldname.eth"), 123, {from: registrantAccount});
+
+		let tx = await registrarMigration.migrateLegacy(sha3("oldname"), {from: otherAccount});
+		assert.equal(tx.receipt.status, 1);
+
+		// New registrar should have owner and expiry date set correctly
+		assert.equal(await registrar.ownerOf(sha3("oldname")), registrantAccount);
+		assert.equal((await registrar.nameExpires(sha3("oldname"))).toString(), transferPeriodEnds.toString());
+
+		// Old registry ownership should be set to the migration contract
+		assert.equal(await oldEns.owner(namehash.hash("oldname.eth")), registrarMigration.address);
+
+		// New registry ownership, resolver and TTL should be set correctly
+		assert.equal(await ens.owner(namehash.hash("oldname.eth")), registrantAccount);
+
+		assert.equal(await ens.resolver(namehash.hash("oldname.eth")), otherAccount);
+		assert.equal(await ens.ttl(namehash.hash("oldname.eth")), 123);
+	});
+
+	it('should still allow auction registrar names to be released', async () => {
 		var balanceBefore = await web3.eth.getBalance(registrantAccount);
 		await interimRegistrar.releaseDeed(sha3('oldname'), {gasPrice: 0, from: registrantAccount});
 		var balanceAfter = await web3.eth.getBalance(registrantAccount);
