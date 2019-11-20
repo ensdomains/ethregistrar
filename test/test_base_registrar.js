@@ -109,6 +109,14 @@ contract('BaseRegistrar', function (accounts) {
 		assert.equal((await registrar.nameExpires(sha3("newname"))).toNumber(), block.timestamp + 86400);
 	});
 
+	it('should allow registrations without updating the registry', async () => {
+		var tx = await registrar.registerOnly(sha3("silentname"), registrantAccount, 86400, {from: controllerAccount});
+		var block = await web3.eth.getBlock(tx.receipt.blockHash);
+		assert.equal(await ens.owner(namehash.hash("silentname.eth")), ZERO_ADDRESS);
+		assert.equal(await registrar.ownerOf(sha3("silentname")), registrantAccount);
+		assert.equal((await registrar.nameExpires(sha3("silentname"))).toNumber(), block.timestamp + 86400);
+	});
+
 	it('should allow renewals', async () => {
 		var oldExpires = await registrar.nameExpires(sha3("newname"));
 		await registrar.renew(sha3("newname"), 86400, {from: controllerAccount});

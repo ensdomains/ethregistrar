@@ -93,7 +93,21 @@ contract BaseRegistrarImplementation is BaseRegistrar, ERC721 {
     /**
      * @dev Register a name.
      */
-    function register(uint256 id, address owner, uint duration) external live onlyController returns(uint) {
+    function register(uint256 id, address owner, uint duration) external returns(uint) {
+      return _register(id, owner, duration, true);
+    }
+
+    /**
+     * @dev Register a name.
+     */
+    function registerOnly(uint256 id, address owner, uint duration) external returns(uint) {
+      return _register(id, owner, duration, false);
+    }
+
+    /**
+     * @dev Register a name.
+     */
+    function _register(uint256 id, address owner, uint duration, bool updateRegistry) internal live onlyController returns(uint) {
         require(available(id));
         require(now + duration + GRACE_PERIOD > now + GRACE_PERIOD); // Prevent future overflow
 
@@ -103,7 +117,9 @@ contract BaseRegistrarImplementation is BaseRegistrar, ERC721 {
             _burn(id);
         }
         _mint(owner, id);
-        ens.setSubnodeOwner(baseNode, bytes32(id), owner);
+        if(updateRegistry) {
+            ens.setSubnodeOwner(baseNode, bytes32(id), owner);
+        }
 
         emit NameRegistered(id, owner, now + duration);
 
