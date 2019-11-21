@@ -78,21 +78,24 @@ contract BaseRegistrarImplementation is BaseRegistrar, ERC721 {
 
     /**
      * @dev Register a name.
+     * @param id The token ID (keccak256 of the label).
+     * @param owner The address that should own the registration.
+     * @param duration Duration in seconds for the registration.
      */
     function register(uint256 id, address owner, uint duration) external returns(uint) {
       return _register(id, owner, duration, true);
     }
 
     /**
-     * @dev Register a name.
+     * @dev Register a name, without modifying the registry.
+     * @param id The token ID (keccak256 of the label).
+     * @param owner The address that should own the registration.
+     * @param duration Duration in seconds for the registration.
      */
     function registerOnly(uint256 id, address owner, uint duration) external returns(uint) {
       return _register(id, owner, duration, false);
     }
 
-    /**
-     * @dev Register a name.
-     */
     function _register(uint256 id, address owner, uint duration, bool updateRegistry) internal live onlyController returns(uint) {
         require(available(id));
         require(now + duration + GRACE_PERIOD > now + GRACE_PERIOD); // Prevent future overflow
