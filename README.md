@@ -8,7 +8,7 @@ These contracts were audited by ConsenSys dilligence; the audit report is availa
 
 ## Contracts
 
-The registrar is separated into several components for simplicity, modularity, and privilege minimisation.
+The registrar is separated into several components for simplicity, modularity, and privilege minimization.
 
 ### [BaseRegistrar](https://github.com/ensdomains/ethregistrar/blob/master/contracts/BaseRegistrarImplementation.sol)
 
