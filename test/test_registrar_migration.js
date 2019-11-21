@@ -170,4 +170,8 @@ contract('RegistrarMigration', function (accounts) {
 		assert.equal(await ens.resolver(namehash.hash("name2.eth")), ZERO_ADDRESS);
 		assert.equal(await ens.ttl(namehash.hash("name2.eth")), 0);
 	});
+
+	it('should not allow new registrations on the old registrar', async () => {
+		await expectFailure(oldRegistrar.register(sha3("testname"), registrantAccount, 86400, {from: controllerAccount}));
+	});
 });
