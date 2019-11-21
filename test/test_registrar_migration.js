@@ -150,6 +150,10 @@ contract('RegistrarMigration', function (accounts) {
 		assert.equal(await ens.ttl(namehash.hash("name.eth")), 123);
 	});
 
+	it('should not allow migrating a name twice', async () => {
+		await expectFailure(registrarMigration.migrate(sha3("name"), {from: otherAccount}));
+	});
+
 	it('should not update the registry for names controlled by contracts', async () => {
 		await oldEns.setOwner(namehash.hash("name2.eth"), oldEns.address, {from: registrantAccount});
 
