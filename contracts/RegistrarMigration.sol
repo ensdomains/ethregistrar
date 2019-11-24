@@ -1,7 +1,7 @@
 pragma solidity ^0.5.0;
 
-import "@ensdomains/ens/contracts/ENSRegistryWithFallback.sol";
-import "@ensdomains/ens/contracts/HashRegistrar.sol";
+import "@ensdomains/ens/contracts/ENS.sol";
+import "@ensdomains/ens/contracts/Registrar.sol";
 import "./BaseRegistrarImplementation.sol";
 import "./OldBaseRegistrarImplementation.sol";
 
