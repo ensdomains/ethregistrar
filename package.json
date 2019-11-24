@@ -20,7 +20,7 @@
     "@ensdomains/buffer": "0.0.10",
     "@ensdomains/dnsregistrar": "^0.3.5",
     "@ensdomains/dnssec-oracle": "^0.1.2",
-    "@ensdomains/ens": "^0.3.6",
+    "@ensdomains/ens": "git+ssh://git@github.com:ensdomains/ens-ghsa-8f9f-pc5v-9r5h.git#feature/migration",
     "@ensdomains/resolver": "^0.1.13",
     "bluebird": "^3.5.3",
     "eth-ens-namehash": "^2.0.8",

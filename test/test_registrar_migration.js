@@ -1,4 +1,5 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
+const ENSWithFallback = artifacts.require('@ensdomains/ens/ENSRegistryWithFallback');
 const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const OldBaseRegistrar = artifacts.require('./OldBaseRegistrarImplementation');
@@ -83,7 +84,7 @@ contract('RegistrarMigration', function (accounts) {
 		await Promise.map(["name", "name2"].map(sha3), (label) => oldRegistrar.register(label, registrantAccount, 86400, {from: controllerAccount}));
 
 		// Create the new ENS registry and registrar
-		ens = await ENS.new();
+		ens = await ENSWithFallback.new(oldEns.address);
 		registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 		await registrar.addController(controllerAccount, {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
@@ -110,8 +111,8 @@ contract('RegistrarMigration', function (accounts) {
 		assert.equal(await oldEns.owner(namehash.hash("oldname.eth")), registrarMigration.address);
 
 		// New registry ownership, resolver and TTL should be set correctly
+		assert.equal(await ens.recordExists(namehash.hash("oldname.eth")), true);
 		assert.equal(await ens.owner(namehash.hash("oldname.eth")), registrantAccount);
-
 		assert.equal(await ens.resolver(namehash.hash("oldname.eth")), otherAccount);
 		assert.equal(await ens.ttl(namehash.hash("oldname.eth")), 123);
 	});
@@ -128,8 +129,8 @@ contract('RegistrarMigration', function (accounts) {
 		assert.equal(await oldEns.owner(namehash.hash("oldname2.eth")), registrarMigration.address);
 
 		// New registry ownership, resolver and TTL should be set correctly
+		assert.equal(await ens.recordExists(namehash.hash("oldname2.eth")), true);
 		assert.equal(await ens.owner(namehash.hash("oldname2.eth")), ZERO_ADDRESS);
-
 		assert.equal(await ens.resolver(namehash.hash("oldname2.eth")), ZERO_ADDRESS);
 		assert.equal(await ens.ttl(namehash.hash("oldname2.eth")), 0);
 	});
@@ -162,8 +163,8 @@ contract('RegistrarMigration', function (accounts) {
 		assert.equal(await oldEns.owner(namehash.hash("name.eth")), registrarMigration.address);
 
 		// New registry ownership, resolver and TTL should be set correctly
+		assert.equal(await ens.recordExists(namehash.hash("name.eth")), true);
 		assert.equal(await ens.owner(namehash.hash("name.eth")), registrantAccount);
-
 		assert.equal(await ens.resolver(namehash.hash("name.eth")), otherAccount);
 		assert.equal(await ens.ttl(namehash.hash("name.eth")), 123);
 	});
@@ -186,8 +187,8 @@ contract('RegistrarMigration', function (accounts) {
 		assert.equal(await oldEns.owner(namehash.hash("name2.eth")), oldEns.address);
 
 		// New registry ownership, resolver and TTL should be unmodified
-		assert.equal(await ens.owner(namehash.hash("name2.eth")), ZERO_ADDRESS);
-
+		assert.equal(await ens.recordExists(namehash.hash("name2.eth")), false);
+		assert.equal(await ens.owner(namehash.hash("name2.eth")), oldEns.address);
 		assert.equal(await ens.resolver(namehash.hash("name2.eth")), ZERO_ADDRESS);
 		assert.equal(await ens.ttl(namehash.hash("name2.eth")), 0);
 	});
