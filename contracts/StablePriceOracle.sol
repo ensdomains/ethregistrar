@@ -56,10 +56,10 @@ contract StablePriceOracle is Ownable, PriceOracle {
      */
     function price(string calldata name, uint /*expires*/, uint duration) view external returns(uint) {
         uint len = name.strlen();
-        require(len > 0);
         if(len > rentPrices.length) {
             len = rentPrices.length;
         }
+        require(len > 0);
         uint priceUSD = rentPrices[len - 1].mul(duration);
 
         // Price of one ether in attodollars

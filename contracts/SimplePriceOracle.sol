@@ -1,9 +1,12 @@
 pragma solidity ^0.5.0;
 
 import "./PriceOracle.sol";
+import "./SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 contract SimplePriceOracle is Ownable, PriceOracle {
+    using SafeMath for *;
+
     // Rent in wei per second
     uint public rentPrice;
 
@@ -24,6 +27,6 @@ contract SimplePriceOracle is Ownable, PriceOracle {
      * @return The price of this renewal or registration, in wei.
      */
     function price(string calldata /*name*/, uint /*expires*/, uint duration) external view returns(uint) {
-        return duration * rentPrice;
+        return duration.mul(rentPrice);
     }
 }

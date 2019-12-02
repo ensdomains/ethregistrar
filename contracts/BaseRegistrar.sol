@@ -1,12 +1,12 @@
 pragma solidity >=0.4.24;
 
 import "@ensdomains/ens/contracts/ENS.sol";
-import "@ensdomains/ens/contracts/HashRegistrar.sol";
-import "openzeppelin-solidity/contracts/token/ERC721/ERC721.sol";
+import "@ensdomains/ens/contracts/Registrar.sol";
+import "openzeppelin-solidity/contracts/token/ERC721/IERC721.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
-contract BaseRegistrar is ERC721, Ownable {
-    uint constant public GRACE_PERIOD = 30 days;
+contract BaseRegistrar is IERC721, Ownable {
+    uint constant public GRACE_PERIOD = 90 days;
 
     event ControllerAdded(address indexed controller);
     event ControllerRemoved(address indexed controller);
@@ -24,7 +24,7 @@ contract BaseRegistrar is ERC721, Ownable {
     bytes32 public baseNode;
 
     // The interim registrar
-    HashRegistrar public previousRegistrar;
+    Registrar public previousRegistrar;
 
     // A map of addresses that are authorised to register and renew names.
     mapping(address=>bool) public controllers;
@@ -34,6 +34,9 @@ contract BaseRegistrar is ERC721, Ownable {
 
     // Revoke controller permission for an address.
     function removeController(address controller) external;
+
+    // Set the resolver for the TLD this registrar manages.
+    function setResolver(address resolver) external;
 
     // Returns the expiration timestamp of the specified label hash.
     function nameExpires(uint256 id) external view returns(uint);
@@ -51,7 +54,7 @@ contract BaseRegistrar is ERC721, Ownable {
     /**
      * @dev Reclaim ownership of a name in ENS, if you own it in the registrar.
      */
-    function reclaim(uint256 id) external;
+    function reclaim(uint256 id, address owner) external;
 
     /**
      * @dev Transfers a registration from the initial registrar.

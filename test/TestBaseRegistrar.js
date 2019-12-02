@@ -62,7 +62,7 @@ contract('BaseRegistrar', function (accounts) {
         await registerOldNames(['name', 'name2'], registrantAccount);
 
         const now = (await web3.eth.getBlock('latest')).timestamp;
-        registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
+        registrar = await BaseRegistrar.new(ens.address, interimRegistrar.address, namehash.hash('eth'), now + 365 * DAYS, {from: ownerAccount});
         await registrar.addController(controllerAccount, {from: ownerAccount});
         await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
     });
@@ -81,7 +81,7 @@ contract('BaseRegistrar', function (accounts) {
         await expectFailure(registrar.renew(sha3("name"), 86400, {from: controllerAccount}));
     });
 
-    it('should not allow transfers until the name is 183 days old', async () => {
+    it('should not allow transfers until the lock period is over', async () => {
         await expectFailure(interimRegistrar.transferRegistrars(sha3('name'), {from: registrantAccount}));
     });
 
@@ -130,12 +130,12 @@ contract('BaseRegistrar', function (accounts) {
         await ens.setSubnodeOwner(namehash.hash("eth"), sha3("newname"), ZERO_ADDRESS);
         assert.equal(await ens.owner(namehash.hash("newname.eth")), ZERO_ADDRESS);
         await ens.setSubnodeOwner(ZERO_HASH, sha3("eth"), registrar.address);
-        await registrar.reclaim(sha3("newname"), {from: registrantAccount});
+        await registrar.reclaim(sha3("newname"), registrantAccount, {from: registrantAccount});
         assert.equal(await ens.owner(namehash.hash("newname.eth")), registrantAccount);
     });
 
     it('should prohibit anyone else from reclaiming a name', async () => {
-        await expectFailure(registrar.reclaim(sha3("newname"), {from: otherAccount}));
+        await expectFailure(registrar.reclaim(sha3("newname"), registrantAccount, {from: otherAccount}));
     });
 
     it('should permit the owner to transfer a registration', async () => {
@@ -156,7 +156,7 @@ contract('BaseRegistrar', function (accounts) {
         await evm.advanceTime((await registrar.nameExpires(sha3("newname"))).toNumber() - ts + 3600);
 
         await expectFailure(registrar.transferFrom(registrantAccount, otherAccount, sha3("newname"), {from: registrantAccount}));
-        await expectFailure(registrar.reclaim(sha3("newname"), {from: registrantAccount}));
+        await expectFailure(registrar.reclaim(sha3("newname"), registrantAccount, {from: registrantAccount}));
     });
 
     it('should allow renewal during the grace period', async () => {
@@ -184,5 +184,10 @@ contract('BaseRegistrar', function (accounts) {
     it('should permit registration of legacy names after the migration period', async () => {
         await registrar.register(sha3("name2"), accounts[1], 86400, {from: controllerAccount});
         assert.equal(await ens.owner(namehash.hash("name2.eth")), accounts[1]);
+    });
+
+    it('should allow the owner to set a resolver address', async () => {
+        await registrar.setResolver(accounts[1], {from: ownerAccount});
+        assert.equal(await ens.resolver(namehash.hash('eth')), accounts[1]);
     });
 });

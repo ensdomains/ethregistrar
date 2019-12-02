@@ -4,6 +4,8 @@
 
 Implements an [ENS](https://ens.domains/) registrar intended for the .eth TLD.
 
+These contracts were audited by ConsenSys dilligence; the audit report is available [here](https://github.com/ConsenSys/ens-audit-report-2019-02).
+
 ## Contracts
 
 The registrar is separated into several components for simplicity, modularity, and privilege minimisation.
