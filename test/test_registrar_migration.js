@@ -1,9 +1,12 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const ENSWithFallback = artifacts.require('@ensdomains/ens/ENSRegistryWithFallback');
 const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
+const EthRegistrarSubdomainRegistrar = artifacts.require('@ensdomains/subdomain-registrar/EthRegistrarSubdomainRegistrar');
+const ENSMigrationSubdomainRegistrar = artifacts.require('@ensdomains/subdomain-registrar/ENSMigrationSubdomainRegistrar');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const OldBaseRegistrar = artifacts.require('./OldBaseRegistrarImplementation');
 const RegistrarMigration = artifacts.require('./RegistrarMigration');
+const TestResolver = artifacts.require('./TestResolver');
 var Promise = require('bluebird');
 
 const namehash = require('eth-ens-namehash');
@@ -49,8 +52,11 @@ contract('RegistrarMigration', function (accounts) {
 	let ens;
 	let interimRegistrar;
 	let oldRegistrar;
+	let oldSubdomainRegistrar;
 	let registrar;
+	let subdomainRegistrar;
 	let transferPeriodEnds;
+	let testResolver;
 
 	async function registerOldNames(ens, names, finalisedNames, account) {
 		var hashes = names.map(sha3);
@@ -71,6 +77,9 @@ contract('RegistrarMigration', function (accounts) {
 		// Create the original ENS registry
 		oldEns = await ENS.new();
 
+		// Create a test resolver
+		testResolver = await TestResolver.new();
+
 		// Create the auction registrar and register some names on it
 		interimRegistrar = await HashRegistrar.new(oldEns.address, namehash.hash('eth'), 1493895600);
 		await oldEns.setSubnodeOwner('0x0', sha3('eth'), interimRegistrar.address);
@@ -81,7 +90,15 @@ contract('RegistrarMigration', function (accounts) {
 		oldRegistrar = await OldBaseRegistrar.new(oldEns.address, interimRegistrar.address, namehash.hash('eth'), transferPeriodEnds, {from: ownerAccount});
 		await oldRegistrar.addController(controllerAccount, {from: ownerAccount});
 		await oldEns.setSubnodeOwner('0x0', sha3('eth'), oldRegistrar.address);
-		await Promise.map(["name", "name2"].map(sha3), (label) => oldRegistrar.register(label, registrantAccount, 86400, {from: controllerAccount}));
+		await Promise.map(["name", "name2", "subname"].map(sha3), (label) => oldRegistrar.register(label, registrantAccount, 86400, {from: controllerAccount}));
+
+		// Create the old subdomain registrar and transfer a name to it
+		oldSubdomainRegistrar = await EthRegistrarSubdomainRegistrar.new(oldEns.address);
+		await oldRegistrar.approve(oldSubdomainRegistrar.address, sha3('subname'), {from: registrantAccount});
+		await oldSubdomainRegistrar.configureDomain("subname", 0, 0, {from: registrantAccount});
+
+		// Register a subdomain on the old subdomain registrar
+		await oldSubdomainRegistrar.register(sha3('subname'), 'foo', registrantAccount, ZERO_ADDRESS, testResolver.address, {from: registrantAccount});
 
 		// Create the new ENS registry and registrar
 		ens = await ENSWithFallback.new(oldEns.address);
@@ -89,9 +106,12 @@ contract('RegistrarMigration', function (accounts) {
 		await registrar.addController(controllerAccount, {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
 
+		// Create the new subdomain registrar
+		subdomainRegistrar = await ENSMigrationSubdomainRegistrar.new(ens.address);
+
 		// Create the migration contract. Make it the owner of 'eth' on the old
 		// registry, and a controller of the new registrar.
-		registrarMigration = await RegistrarMigration.new(oldRegistrar.address, registrar.address);
+		registrarMigration = await RegistrarMigration.new(oldRegistrar.address, registrar.address, oldSubdomainRegistrar.address, subdomainRegistrar.address);
 		await registrar.addController(registrarMigration.address, {from: ownerAccount});
 		await oldEns.setSubnodeOwner('0x0', sha3('eth'), registrarMigration.address);
 	});
@@ -174,23 +194,55 @@ contract('RegistrarMigration', function (accounts) {
 	});
 
 	it('should not update the registry for names controlled by contracts', async () => {
-		await oldEns.setOwner(namehash.hash("name2.eth"), oldEns.address, {from: registrantAccount});
+		await oldEns.setOwner(namehash.hash("name2.eth"), testResolver.address, {from: registrantAccount});
+		assert.equal(await oldEns.owner(namehash.hash("name2.eth")), testResolver.address);
 
 		let tx = await registrarMigration.migrate(sha3("name2"), {from: otherAccount});
 		assert.equal(tx.receipt.status, 1);
 
 		// New registrar should have owner and expiry date set correctly
 		assert.equal(await registrar.ownerOf(sha3("name2")), registrantAccount);
-		assert.equal((await oldRegistrar.nameExpires(sha3("name2"))).toString(), (await registrar.nameExpires(sha3("name"))).toString());
+		assert.equal((await oldRegistrar.nameExpires(sha3("name2"))).toString(), (await registrar.nameExpires(sha3("name2"))).toString());
 
 		// Old registry ownership should be unchanged
-		assert.equal(await oldEns.owner(namehash.hash("name2.eth")), oldEns.address);
+		assert.equal(await oldEns.owner(namehash.hash("name2.eth")), testResolver.address);
 
 		// New registry ownership, resolver and TTL should be unmodified
 		assert.equal(await ens.recordExists(namehash.hash("name2.eth")), false);
-		assert.equal(await ens.owner(namehash.hash("name2.eth")), oldEns.address);
+		assert.equal(await ens.owner(namehash.hash("name2.eth")), testResolver.address);
 		assert.equal(await ens.resolver(namehash.hash("name2.eth")), ZERO_ADDRESS);
 		assert.equal(await ens.ttl(namehash.hash("name2.eth")), 0);
+	});
+
+	it('should allow migrating a name owned by the subdomain registrar', async () => {
+		await oldSubdomainRegistrar.setResolver("subname", testResolver.address, {from: registrantAccount});
+		let tx = await registrarMigration.migrate(sha3("subname"), {from: otherAccount});
+		assert.equal(tx.receipt.status, 1);
+
+		// New registrar should have owner and expiry date set correctly
+		assert.equal(await registrar.ownerOf(sha3("subname")), subdomainRegistrar.address);
+		assert.equal((await oldRegistrar.nameExpires(sha3("subname"))).toString(), (await registrar.nameExpires(sha3("subname"))).toString());
+
+		// Old registry ownership should be cleared
+		assert.equal(await oldEns.owner(namehash.hash("subname.eth")), registrarMigration.address);
+
+		// New registry ownership should point at the new subdomain registrar, and resolver should be unmodified
+		assert.equal(await ens.recordExists(namehash.hash("subname.eth")), true);
+		assert.equal(await ens.owner(namehash.hash("subname.eth")), subdomainRegistrar.address);
+		assert.equal(await ens.resolver(namehash.hash("subname.eth")), testResolver.address);
+	});
+
+	it('should allow migrating subdomains after the parent domain is migrated', async () => {
+		await subdomainRegistrar.migrateSubdomain(namehash.hash("subname.eth"), sha3("foo"));
+		assert.equal(await ens.recordExists(namehash.hash("foo.subname.eth")), true);
+		assert.equal(await ens.owner(namehash.hash("foo.subname.eth")), registrantAccount);
+		assert.equal(await ens.resolver(namehash.hash("foo.subname.eth")), testResolver.address);
+	});
+
+	it('should allow registering a subdomain on a migrated domain', async () => {
+		await subdomainRegistrar.register(sha3('subname'), 'bar', registrantAccount, ZERO_ADDRESS, testResolver.address, {from: registrantAccount});
+		assert.equal(await ens.owner(namehash.hash('bar.subname.eth')), registrantAccount);
+		assert.equal(await ens.resolver(namehash.hash('bar.subname.eth')), testResolver.address);
 	});
 
 	it('should not allow new registrations on the old registrar', async () => {

@@ -2,11 +2,14 @@ pragma solidity ^0.5.0;
 
 import "@ensdomains/ens/contracts/ENS.sol";
 import "@ensdomains/ens/contracts/Registrar.sol";
+import "@ensdomains/subdomain-registrar/contracts/AbstractSubdomainRegistrar.sol";
 import "./BaseRegistrarImplementation.sol";
 import "./OldBaseRegistrarImplementation.sol";
 
 contract RegistrarMigration {
     using SafeMath for uint;
+
+    bytes constant private UNUSED_SUBDOMAIN = hex'ffffffffffffffff';
 
     Registrar public legacyRegistrar;
     uint transferPeriodEnds;
@@ -14,50 +17,70 @@ contract RegistrarMigration {
     BaseRegistrarImplementation public newRegistrar;
     ENS public oldENS;
     ENS public newENS;
+    AbstractSubdomainRegistrar public oldSubdomainRegistrar;
+    AbstractSubdomainRegistrar public newSubdomainRegistrar;
+
     bytes32 public baseNode;
 
-    constructor(OldBaseRegistrarImplementation _old, BaseRegistrarImplementation _new) public {
+    constructor(OldBaseRegistrarImplementation _old, BaseRegistrarImplementation _new, AbstractSubdomainRegistrar _oldSubdomainRegistrar, AbstractSubdomainRegistrar _newSubdomainRegistrar) public {
         oldRegistrar = _old;
         oldENS = _old.ens();
         baseNode = _old.baseNode();
         legacyRegistrar = _old.previousRegistrar();
         transferPeriodEnds = _old.transferPeriodEnds();
+        oldSubdomainRegistrar = _oldSubdomainRegistrar;
 
         newRegistrar = _new;
         newENS = _new.ens();
         require(_new.baseNode() == baseNode);
+        newSubdomainRegistrar = _newSubdomainRegistrar;
     }
 
     function doMigration(uint256 tokenId, address registrant, uint expires) internal {
         bytes32 node = keccak256(abi.encodePacked(baseNode, bytes32(tokenId)));
         address controller = oldENS.owner(node);
 
-        if(hasCode(controller)) {
+        if(address(registrant) != address(oldSubdomainRegistrar) && hasCode(controller)) {
             // For names controlled by a contract or not in ENS, only migrate over the registration
             newRegistrar.registerOnly(tokenId, registrant, expires.sub(now));
+            return;
+        }
+
+        // Register the name on the new registry with the same expiry time.
+        newRegistrar.register(tokenId, address(this), expires.sub(now));
+
+        // Copy over resolver, TTL and owner to the new registry.
+        address resolver = oldENS.resolver(node);
+        if(resolver != address(0)) {
+            newENS.setResolver(node, resolver);
+        }
+
+        uint64 ttl = oldENS.ttl(node);
+        if(ttl != 0) {
+            newENS.setTTL(node, ttl);
+        }
+
+        if(address(registrant) == address(oldSubdomainRegistrar)) {
+            // Handle subdomain registrar domains
+            // Fetch data from the old subdomain registrar
+            (string memory label, uint price,, uint referralFeePPM) = oldSubdomainRegistrar.query(bytes32(tokenId), string(UNUSED_SUBDOMAIN));
+            address owner = oldSubdomainRegistrar.owner(bytes32(tokenId));
+            if(bytes(label).length == 0) {
+              revert("Unable to migrate domain on subdomain registrar");
+            }
+
+            // Transfer to the new subdomain registrar
+            newRegistrar.approve(address(newSubdomainRegistrar), tokenId);
+            newSubdomainRegistrar.configureDomainFor(label, price, referralFeePPM, address(uint160(owner)), address(0));
         } else {
-            // Register the name on the new registry with the same expiry time.
-            newRegistrar.register(tokenId, address(this), expires.sub(now));
-
-            // Copy over resolver, TTL and owner to the new registry.
-            address resolver = oldENS.resolver(node);
-            if(resolver != address(0)) {
-                newENS.setResolver(node, resolver);
-            }
-
-            uint64 ttl = oldENS.ttl(node);
-            if(ttl != 0) {
-                newENS.setTTL(node, ttl);
-            }
-
             newENS.setOwner(node, controller);
 
             // Transfer the registration to the registrant.
             newRegistrar.transferFrom(address(this), registrant, tokenId);
-
-            // Replace ownership on the old registry so it can't be updated any further.
-            oldENS.setSubnodeOwner(baseNode, bytes32(tokenId), address(this));
         }
+
+        // Replace ownership on the old registry so it can't be updated any further.
+        oldENS.setSubnodeOwner(baseNode, bytes32(tokenId), address(this));
     }
 
     /**

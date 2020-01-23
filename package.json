@@ -22,6 +22,7 @@
     "@ensdomains/dnssec-oracle": "^0.1.2",
     "@ensdomains/ens": "git+ssh://git@github.com:ensdomains/ens-ghsa-8f9f-pc5v-9r5h.git#feature/migration",
     "@ensdomains/resolver": "^0.1.13",
+    "@ensdomains/subdomain-registrar": "git+ssh://git@github.com:ensdomains/subdomain-registrar-ghsa-7gp8-c7gv-q7qx#feature/migration",
     "bluebird": "^3.5.3",
     "eth-ens-namehash": "^2.0.8",
     "openzeppelin-solidity": "2.1.3",
