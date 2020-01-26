@@ -60,7 +60,7 @@ contract RegistrarMigration {
             newENS.setTTL(node, ttl);
         }
 
-        if(address(registrant) == address(oldSubdomainRegistrar)) {
+        if(address(registrant) == address(oldSubdomainRegistrar) && address(registrant) != address(0)) {
             // Handle subdomain registrar domains
             // Fetch data from the old subdomain registrar
             (string memory label, uint price,, uint referralFeePPM) = oldSubdomainRegistrar.query(bytes32(tokenId), string(UNUSED_SUBDOMAIN));
