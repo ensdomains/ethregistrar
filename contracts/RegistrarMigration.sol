@@ -6,6 +6,18 @@ import "@ensdomains/subdomain-registrar/contracts/AbstractSubdomainRegistrar.sol
 import "./BaseRegistrarImplementation.sol";
 import "./OldBaseRegistrarImplementation.sol";
 
+pragma solidity >=0.4.24;
+
+interface OldENS {
+    function setSubnodeOwner(bytes32 node, bytes32 label, address owner) external;
+    function setResolver(bytes32 node, address resolver) external;
+    function setOwner(bytes32 node, address owner) external;
+    function setTTL(bytes32 node, uint64 ttl) external;
+    function owner(bytes32 node) external view returns (address);
+    function resolver(bytes32 node) external view returns (address);
+    function ttl(bytes32 node) external view returns (uint64);
+}
+
 contract RegistrarMigration {
     using SafeMath for uint;
 
@@ -15,7 +27,7 @@ contract RegistrarMigration {
     uint transferPeriodEnds;
     OldBaseRegistrarImplementation public oldRegistrar;
     BaseRegistrarImplementation public newRegistrar;
-    ENS public oldENS;
+    OldENS public oldENS;
     ENS public newENS;
     AbstractSubdomainRegistrar public oldSubdomainRegistrar;
     AbstractSubdomainRegistrar public newSubdomainRegistrar;
@@ -24,7 +36,7 @@ contract RegistrarMigration {
 
     constructor(OldBaseRegistrarImplementation _old, BaseRegistrarImplementation _new, AbstractSubdomainRegistrar _oldSubdomainRegistrar, AbstractSubdomainRegistrar _newSubdomainRegistrar) public {
         oldRegistrar = _old;
-        oldENS = _old.ens();
+        oldENS = OldENS(address(_old.ens()));
         baseNode = _old.baseNode();
         legacyRegistrar = _old.previousRegistrar();
         transferPeriodEnds = _old.transferPeriodEnds();
