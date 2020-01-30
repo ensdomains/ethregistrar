@@ -1,6 +1,6 @@
 {
   "name": "@ensdomains/ethregistrar",
-  "version": "1.2.9",
+  "version": "2.0.0",
   "description": "",
   "main": "truffle-config.js",
   "directories": {
@@ -20,8 +20,9 @@
     "@ensdomains/buffer": "0.0.10",
     "@ensdomains/dnsregistrar": "^0.3.5",
     "@ensdomains/dnssec-oracle": "^0.1.2",
-    "@ensdomains/ens": "^0.3.6",
+    "@ensdomains/ens": "^0.4.0",
     "@ensdomains/resolver": "^0.1.13",
+    "@ensdomains/subdomain-registrar": "^0.2.0",
     "bluebird": "^3.5.3",
     "eth-ens-namehash": "^2.0.8",
     "openzeppelin-solidity": "2.1.3",
