@@ -20,7 +20,7 @@ const advanceTime = Promise.promisify(function(delay, done) {
 	}
 );
 
-async function expectFailure(call) {
+async function expectFailure(call, isCall) {
 	let tx;
 	try {
 		tx = await call;
@@ -31,7 +31,10 @@ async function expectFailure(call) {
 			'Returned error: VM Exception while processing transaction: revert'
 		);
 	}
-	if(tx !== undefined) {
+	if(!isCall && tx !== undefined) {
+		if(typeof tx == 'string') {
+			tx.receipt = web3.eth.getTransactionReceipt(tx);
+		}
 		assert.equal(parseInt(tx.receipt.status), 0);
 	}
 }
@@ -135,7 +138,7 @@ contract('BaseRegistrar', function (accounts) {
 		var expires = await registrar.nameExpires(sha3("newname"));
 		var grace = await registrar.GRACE_PERIOD();
 		await advanceTime(expires.toNumber() - ts + grace.toNumber() + 3600);
-		expectFailure(registrar.ownerOf(sha3("newname"))); // ownerOf reverts for nonexistent names
+		await expectFailure(registrar.ownerOf(sha3("newname")), true); // ownerOf reverts for nonexistent names
 		await registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount});
 		assert.equal(await registrar.ownerOf(sha3("newname")), otherAccount);
 	});
