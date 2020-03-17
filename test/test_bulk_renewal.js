@@ -96,9 +96,11 @@ contract('ETHRegistrarController', function (accounts) {
 
 	it('should permit bulk renewal of names', async () => {
 		const oldExpiry = await baseRegistrar.nameExpires(sha3('test2'));
-		const tx = await bulkRenewal.renewAll(['test1', 'test2'], 86400, {value: 86400 * 2});
+		const tx = await bulkRenewal.renewAll(['test1', 'test2'], 86400, {value: 86401 * 2});
 		assert.equal(tx.receipt.status, true);
 		const newExpiry = await baseRegistrar.nameExpires(sha3('test2'));
 		assert.equal(newExpiry - oldExpiry, 86400);
+		// Check any excess funds are returned
+		assert.equal(await web3.eth.getBalance(bulkRenewal.address), 0);
 	});
 });
