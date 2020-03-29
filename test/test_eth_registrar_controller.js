@@ -197,7 +197,19 @@ contract('ETHRegistrarController', function (accounts) {
 		});
 
 		it('should require sufficient value for a renewal', async () => {
-			await expectFailure(controller.renew("name", 86400));
+			await expectFailure(controller.renew("newname", 86400));
+		});
+
+		it('should permit bulk renewal', async () => {
+			var balanceBefore = await web3.eth.getBalance(controller.address);
+			const nameExpires = await baseRegistrar.nameExpires(sha3("newname"));
+			await controller.renewAll(["newname", "newname"], 86400, {value: 86400 * 2 + 1});
+			assert.equal((await baseRegistrar.nameExpires(sha3("newname"))) - nameExpires, 86400 * 2);
+			assert.equal((await web3.eth.getBalance(controller.address)) - balanceBefore, 86400 * 2);
+		});
+
+		it('should require sufficient value for a bulk renewal', async () => {
+			await expectFailure(controller.renewAll(["name", "newname"], 86400, {value: 86401}));
 		});
 
 		it('should allow the registrar owner to withdraw funds', async () => {

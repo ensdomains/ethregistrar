@@ -1,9 +1,11 @@
 pragma solidity ^0.5.0;
+pragma experimental ABIEncoderV2;
 
 import "./PriceOracle.sol";
 import "./BaseRegistrar.sol";
 import "./StringUtils.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "@ensdomains/resolver/contracts/Resolver.sol";
 
 /**
@@ -11,6 +13,7 @@ import "@ensdomains/resolver/contracts/Resolver.sol";
  */
 contract ETHRegistrarController is Ownable {
     using StringUtils for *;
+    using SafeMath for uint256;
 
     uint constant public MIN_REGISTRATION_DURATION = 28 days;
 
@@ -23,10 +26,13 @@ contract ETHRegistrarController is Ownable {
         keccak256("register(string,address,uint256,bytes32)") ^
         keccak256("renew(string,uint256)")
     );
-
     bytes4 constant private COMMITMENT_WITH_CONFIG_CONTROLLER_ID = bytes4(
         keccak256("registerWithConfig(string,address,uint256,bytes32,address,address)") ^
         keccak256("makeCommitmentWithConfig(string,address,bytes32,address,address)")
+    );
+    bytes4 constant public BULK_RENEWAL_ID = bytes4(
+        keccak256("rentPrice(string[],uint)") ^
+        keccak256("renewAll(string[],uint")
     );
 
     BaseRegistrar base;
@@ -82,7 +88,7 @@ contract ETHRegistrarController is Ownable {
     }
 
     function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
-      registerWithConfig(name, owner, duration, secret, address(0), address(0));
+        registerWithConfig(name, owner, duration, secret, address(0), address(0));
     }
 
     function registerWithConfig(string memory name, address owner, uint duration, bytes32 secret, address resolver, address addr) public payable {
@@ -126,17 +132,22 @@ contract ETHRegistrarController is Ownable {
     }
 
     function renew(string calldata name, uint duration) external payable {
-        uint cost = rentPrice(name, duration);
+        uint cost = _doRenew(name, duration);
         require(msg.value >= cost);
-
-        bytes32 label = keccak256(bytes(name));
-        uint expires = base.renew(uint256(label), duration);
 
         if(msg.value > cost) {
             msg.sender.transfer(msg.value - cost);
         }
-
-        emit NameRenewed(name, label, cost, expires);
+    }
+    function renewAll(string[] calldata names, uint duration) external payable {
+        uint remaining = msg.value;
+        for(uint i = 0; i < names.length; i++) {
+            uint cost = _doRenew(names[i], duration);
+            remaining = remaining.sub(cost);
+        }
+        if(remaining > 0) {
+            msg.sender.transfer(remaining);
+        }
     }
 
     function setPriceOracle(PriceOracle _prices) public onlyOwner {
@@ -156,7 +167,8 @@ contract ETHRegistrarController is Ownable {
     function supportsInterface(bytes4 interfaceID) external pure returns (bool) {
         return interfaceID == INTERFACE_META_ID ||
                interfaceID == COMMITMENT_CONTROLLER_ID ||
-               interfaceID == COMMITMENT_WITH_CONFIG_CONTROLLER_ID;
+               interfaceID == COMMITMENT_WITH_CONFIG_CONTROLLER_ID ||
+               interfaceID == BULK_RENEWAL_ID;
     }
 
     function _consumeCommitment(string memory name, uint duration, bytes32 commitment) internal returns (uint256) {
@@ -173,6 +185,14 @@ contract ETHRegistrarController is Ownable {
         require(duration >= MIN_REGISTRATION_DURATION);
         require(msg.value >= cost);
 
+        return cost;
+    }
+
+    function _doRenew(string memory name, uint duration) internal returns(uint cost) {
+        uint cost = rentPrice(name, duration);
+        bytes32 label = keccak256(bytes(name));
+        uint expires = base.renew(uint256(label), duration);
+        emit NameRenewed(name, label, cost, expires);
         return cost;
     }
 }
