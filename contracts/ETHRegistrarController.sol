@@ -1,6 +1,7 @@
 pragma solidity ^0.5.0;
 pragma experimental ABIEncoderV2;
 
+import "./ACL.sol";
 import "./PriceOracle.sol";
 import "./BaseRegistrar.sol";
 import "./StringUtils.sol";
@@ -35,24 +36,29 @@ contract ETHRegistrarController is Ownable {
         keccak256("renewAll(string[],uint")
     );
 
-    BaseRegistrar base;
-    PriceOracle prices;
+    // Base Registrar contract
+    BaseRegistrar public base;
+    // Price oracle contract
+    PriceOracle public prices;
+    // Minimum and maximum commitment ages, in seconds.
     uint public minCommitmentAge;
     uint public maxCommitmentAge;
-
+    // Referral fee, in 1/1000ths
+    uint public referralFeeMillis = 0;
+    // A map of commitment values to when they were committed to
     mapping(bytes32=>uint) public commitments;
+    // An access-control list for referrers
+    ACL public referrers;
 
     event NameRegistered(string name, bytes32 indexed label, address indexed owner, uint cost, uint expires);
     event NameRenewed(string name, bytes32 indexed label, uint cost, uint expires);
     event NewPriceOracle(address indexed oracle);
 
-    constructor(BaseRegistrar _base, PriceOracle _prices, uint _minCommitmentAge, uint _maxCommitmentAge) public {
-        require(_maxCommitmentAge > _minCommitmentAge);
-
+    constructor(BaseRegistrar _base, PriceOracle _prices, uint _minCommitmentAge, uint _maxCommitmentAge, ACL _referrers) public {
         base = _base;
         prices = _prices;
-        minCommitmentAge = _minCommitmentAge;
-        maxCommitmentAge = _maxCommitmentAge;
+        setCommitmentAges(_minCommitmentAge, _maxCommitmentAge);
+        setReferrersACL(_referrers);
     }
 
     function rentPrice(string memory name, uint duration) view public returns(uint) {
@@ -88,10 +94,14 @@ contract ETHRegistrarController is Ownable {
     }
 
     function register(string calldata name, address owner, uint duration, bytes32 secret) external payable {
-        registerWithConfig(name, owner, duration, secret, address(0), address(0));
+        registerWithReferrer(name, owner, duration, secret, address(0), address(0), address(0));
     }
 
     function registerWithConfig(string memory name, address owner, uint duration, bytes32 secret, address resolver, address addr) public payable {
+        registerWithReferrer(name, owner, duration, secret, address(0), resolver, addr);
+    }
+
+    function registerWithReferrer(string memory name, address owner, uint duration, bytes32 secret, address payable referrer, address resolver, address addr) public payable {
         bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, resolver, addr);
         uint cost = _consumeCommitment(name, duration, commitment);
 
@@ -129,25 +139,38 @@ contract ETHRegistrarController is Ownable {
         if(msg.value > cost) {
             msg.sender.transfer(msg.value - cost);
         }
+
+        _sendReferralFee(referrer, cost);
     }
 
     function renew(string calldata name, uint duration) external payable {
+        renewWithReferrer(name, duration, address(0));
+    }
+
+    function renewWithReferrer(string memory name, uint duration, address payable referrer) public payable {
         uint cost = _doRenew(name, duration);
         require(msg.value >= cost);
 
+        // Refund any extra
         if(msg.value > cost) {
             msg.sender.transfer(msg.value - cost);
         }
+
+        _sendReferralFee(referrer, cost);
     }
-    function renewAll(string[] calldata names, uint duration) external payable {
-        uint remaining = msg.value;
+    function renewAll(string[] calldata names, uint duration, address payable referrer) external payable {
+        uint totalCost = 0;
         for(uint i = 0; i < names.length; i++) {
-            uint cost = _doRenew(names[i], duration);
-            remaining = remaining.sub(cost);
+            totalCost += _doRenew(names[i], duration);
         }
-        if(remaining > 0) {
-            msg.sender.transfer(remaining);
+        require(totalCost <= msg.value);
+
+        // Refund any extra
+        if(totalCost < msg.value) {
+            msg.sender.transfer(msg.value - totalCost);
         }
+
+        _sendReferralFee(referrer, totalCost);
     }
 
     function setPriceOracle(PriceOracle _prices) public onlyOwner {
@@ -156,8 +179,18 @@ contract ETHRegistrarController is Ownable {
     }
 
     function setCommitmentAges(uint _minCommitmentAge, uint _maxCommitmentAge) public onlyOwner {
+        require(_minCommitmentAge < _maxCommitmentAge);
         minCommitmentAge = _minCommitmentAge;
         maxCommitmentAge = _maxCommitmentAge;
+    }
+
+    function setReferralFee(uint _referralFeeMillis) public onlyOwner {
+        require(_referralFeeMillis < 1000);
+        referralFeeMillis = _referralFeeMillis;
+    }
+
+    function setReferrersACL(ACL _referrers) public onlyOwner {
+        referrers = _referrers;
     }
 
     function withdraw() public onlyOwner {
@@ -194,5 +227,13 @@ contract ETHRegistrarController is Ownable {
         uint expires = base.renew(uint256(label), duration);
         emit NameRenewed(name, label, cost, expires);
         return cost;
+    }
+    
+    function _sendReferralFee(address payable referrer, uint cost) internal {
+        if(referrer != address(0) && referralFeeMillis > 0 && address(referrers) != address(0)) {
+            require(referrers.entries(referrer));
+            uint referralFee = (cost * referralFeeMillis) / 1000;
+            referrer.transfer(referralFee);
+        }
     }
 }
