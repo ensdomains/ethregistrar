@@ -52,6 +52,7 @@ contract ETHRegistrarController is Ownable {
 
     event NameRegistered(string name, bytes32 indexed label, address indexed owner, uint cost, uint expires);
     event NameRenewed(string name, bytes32 indexed label, uint cost, uint expires);
+    event ReferralFeeSent(address indexed referrer, uint amount);
     event NewPriceOracle(address indexed oracle);
 
     constructor(BaseRegistrar _base, PriceOracle _prices, uint _minCommitmentAge, uint _maxCommitmentAge, ACL _referrers) public {
@@ -234,6 +235,7 @@ contract ETHRegistrarController is Ownable {
             require(referrers.entries(referrer));
             uint referralFee = (cost * referralFeeMillis) / 1000;
             referrer.transfer(referralFee);
+            emit ReferralFeeSent(referrer, referralFee);
         }
     }
 }

@@ -233,7 +233,7 @@ contract('ETHRegistrarController', function (accounts) {
 		await advanceTime((await controller.minCommitmentAge()).toNumber());
 		const balanceBefore = await web3.eth.getBalance(referrerAccount);
 		var tx = await controller.registerWithReferrer("referrername", registrantAccount, 28 * DAYS, secret, referrerAccount, resolver.address, registrantAccount, {value: 28 * DAYS + 1, gasPrice: 0});
-		assert.equal(tx.logs.length, 1);
+		assert.equal(tx.logs.length, 2);
 		assert.equal(tx.logs[0].event, "NameRegistered");
 		assert.equal(tx.logs[0].args.name, "referrername");
 		assert.equal(tx.logs[0].args.owner, registrantAccount);
@@ -248,5 +248,13 @@ contract('ETHRegistrarController', function (accounts) {
 
 	it('should not permit renewals with unapproved referrers', async () => {
 		await expectFailure(controller.renewWithReferrer("referrername", 86400, ownerAccount, {value: 86400}));
+	});
+
+	it('should only allow the owner to set the referral fee', async () => {
+		await expectFailure(controller.setReferralFee(1000, {from: registrantAccount}));
+	});
+
+	it('should only allow the owner to set the referrer list', async () => {
+		await expectFailure(controller.setReferrersACL(referrers.address, {from: registrantAccount}));
 	});
 });
