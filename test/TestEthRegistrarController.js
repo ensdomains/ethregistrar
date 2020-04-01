@@ -1,18 +1,14 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
-const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const PublicResolver = artifacts.require('@ensdomains/resolver/PublicResolver');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
 const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
-var Promise = require('bluebird');
 const { evm, exceptions } = require("@ensdomains/test-utils");
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
-const toBN = require('web3-utils').toBN;
 
 const DAYS = 24 * 60 * 60;
-const SALT = sha3('foo');
 const NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 contract('ETHRegistrarController', function (accounts) {

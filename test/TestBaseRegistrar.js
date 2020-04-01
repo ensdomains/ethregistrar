@@ -1,15 +1,11 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
-const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
-var Promise = require('bluebird');
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
 const toBN = require('web3-utils').toBN;
 const { evm, exceptions } = require("@ensdomains/test-utils");
 
-const DAYS = 24 * 60 * 60;
-const SALT = sha3('foo');
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 

@@ -1,10 +1,7 @@
 const DummyOracle = artifacts.require('./DummyOracle');
 const StablePriceOracle = artifacts.require('./StablePriceOracle');
-var Promise = require('bluebird');
 
 const toBN = require('web3-utils').toBN;
-
-const DAYS = 24 * 60 * 60;
 
 contract('StablePriceOracle', function (accounts) {
     let priceOracle;
