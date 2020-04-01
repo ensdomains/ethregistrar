@@ -108,7 +108,13 @@ contract('BaseRegistrar', function (accounts) {
 		var expires = await registrar.nameExpires(sha3("newname"));
 		var grace = await registrar.GRACE_PERIOD();
 		await evm.advanceTime(expires.toNumber() - ts + grace.toNumber() + 3600);
-		await exceptions.expectFailure(registrar.ownerOf(sha3("newname"))); // ownerOf reverts for nonexistent names
+
+		try {
+			await registrar.ownerOf(sha3("newname"));
+		} catch (error) {
+			exceptions.ensureException(error);
+		}
+
 		await registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount});
 		assert.equal(await registrar.ownerOf(sha3("newname")), otherAccount);
 	});
