@@ -1,42 +1,15 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
-const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const PublicResolver = artifacts.require('@ensdomains/resolver/PublicResolver');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
 const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
-var Promise = require('bluebird');
+const { evm, exceptions } = require("@ensdomains/test-utils");
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
-const toBN = require('web3-utils').toBN;
 
 const DAYS = 24 * 60 * 60;
-const SALT = sha3('foo');
 const NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
-
-const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.send({
-		jsonrpc: "2.0",
-		"method": "evm_increaseTime",
-		params: [delay]}, done)
-	}
-);
-
-async function expectFailure(call) {
-	let tx;
-	try {
-		tx = await call;
-	} catch (error) {
-		// Assert ganache revert exception
-		assert.equal(
-			error.message,
-			'Returned error: VM Exception while processing transaction: revert'
-		);
-	}
-	if(tx !== undefined) {
-		assert.equal(parseInt(tx.receipt.status), 0);
-	}
-}
 
 contract('ETHRegistrarController', function (accounts) {
 	let ens;
@@ -106,7 +79,7 @@ contract('ETHRegistrarController', function (accounts) {
 			var tx = await controller.commit(commitment);
 			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
 
-			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			await evm.advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			var tx = await controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS + 1, gasPrice: 0});
 			assert.equal(tx.logs.length, 1);
@@ -125,7 +98,7 @@ contract('ETHRegistrarController', function (accounts) {
 			var tx = await controller.commit(commitment);
 			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
 
-			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			await evm.advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			var tx = await controller.registerWithConfig("newconfigname", registrantAccount, 28 * DAYS, secret, resolver.address, registrantAccount, {value: 28 * DAYS + 1, gasPrice: 0});
 			assert.equal(tx.logs.length, 1);
@@ -141,7 +114,7 @@ contract('ETHRegistrarController', function (accounts) {
 		});
 
 		it('should not allow a commitment with addr but not resolver', async () => {
-			await expectFailure(controller.makeCommitmentWithConfig("newconfigname2", registrantAccount, secret, NULL_ADDRESS, registrantAccount));
+			await exceptions.expectFailure(controller.makeCommitmentWithConfig("newconfigname2", registrantAccount, secret, NULL_ADDRESS, registrantAccount));
 		});
 
 		it('should permit a registration with resolver but not addr', async () => {
@@ -149,7 +122,7 @@ contract('ETHRegistrarController', function (accounts) {
 			var tx = await controller.commit(commitment);
 			assert.equal(await controller.commitments(commitment), (await web3.eth.getBlock(tx.receipt.blockNumber)).timestamp);
 
-			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			await evm.advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
 			var tx = await controller.registerWithConfig("newconfigname2", registrantAccount, 28 * DAYS, secret, resolver.address, NULL_ADDRESS, {value: 28 * DAYS + 1, gasPrice: 0});
 			assert.equal(tx.logs.length, 1);
@@ -166,25 +139,25 @@ contract('ETHRegistrarController', function (accounts) {
 		it('should include the owner in the commitment', async () => {
 			await controller.commit(await controller.makeCommitment("newname2", accounts[2], secret));
 
-			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			await evm.advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
-			await expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
+			await exceptions.expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
 
 		it('should reject duplicate registrations', async () => {
 			await controller.commit(await controller.makeCommitment("newname", registrantAccount, secret));
 
-			await advanceTime((await controller.minCommitmentAge()).toNumber());
+			await evm.advanceTime((await controller.minCommitmentAge()).toNumber());
 			var balanceBefore = await web3.eth.getBalance(controller.address);
-			await expectFailure(controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
+			await exceptions.expectFailure(controller.register("newname", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
 
 		it('should reject for expired commitments', async () => {
 			await controller.commit(await controller.makeCommitment("newname2", registrantAccount, secret));
 
-			await advanceTime((await controller.maxCommitmentAge()).toNumber() + 1);
+			await evm.advanceTime((await controller.maxCommitmentAge()).toNumber() + 1);
 			var balanceBefore = await web3.eth.getBalance(controller.address);
-			await expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
+			await exceptions.expectFailure(controller.register("newname2", registrantAccount, 28 * DAYS, secret, {value: 28 * DAYS, gasPrice: 0}));
 		});
 
 		it('should allow anyone to renew a name', async () => {
@@ -197,7 +170,7 @@ contract('ETHRegistrarController', function (accounts) {
 		});
 
 		it('should require sufficient value for a renewal', async () => {
-			await expectFailure(controller.renew("name", 86400));
+			await exceptions.expectFailure(controller.renew("name", 86400));
 		});
 
 		it('should allow the registrar owner to withdraw funds', async () => {
