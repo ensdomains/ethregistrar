@@ -8,6 +8,7 @@ const OldBaseRegistrar = artifacts.require('./OldBaseRegistrarImplementation');
 const RegistrarMigration = artifacts.require('./RegistrarMigration');
 const TestResolver = artifacts.require('./TestResolver');
 var Promise = require('bluebird');
+const { evm, exceptions } = require("@ensdomains/test-utils");
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
@@ -16,31 +17,6 @@ const toBN = require('web3-utils').toBN;
 const DAYS = 24 * 60 * 60;
 const SALT = sha3('foo');
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.send({
-		jsonrpc: "2.0",
-		"method": "evm_increaseTime",
-		params: [delay]}, done)
-	}
-);
-
-async function expectFailure(call) {
-	let tx;
-	try {
-		tx = await call;
-	} catch (error) {
-		// Assert ganache revert exception
-		assert.equal(
-			error.message,
-			'Returned error: VM Exception while processing transaction: revert'
-		);
-	}
-	if(tx !== undefined) {
-		const receipt = tx.receipt || web3.eth.getTransactionReceipt(tx);
-		assert.equal(parseInt(receipt.status), 0);
-	}
-}
 
 contract('RegistrarMigration', function (accounts) {
 	const ownerAccount = accounts[0];
@@ -64,9 +40,9 @@ contract('RegistrarMigration', function (accounts) {
 		var bidHashes = await Promise.map(hashes, (hash) => interimRegistrar.shaBid(hash, account, value, SALT));
 		await interimRegistrar.startAuctions(hashes);
 		await Promise.map(bidHashes, (h) => interimRegistrar.newBid(h, {value: value, from: account}));
-		await advanceTime(3 * DAYS + 1);
+		await evm.advanceTime(3 * DAYS + 1);
 		await Promise.map(hashes, (hash) => interimRegistrar.unsealBid(hash, value, SALT, {from: account}));
-		await advanceTime(2 * DAYS + 1);
+		await evm.advanceTime(2 * DAYS + 1);
 		await Promise.map(finalisedNames.map(sha3), (hash) => interimRegistrar.finalizeAuction(hash, {from: account}));
 		for(var name of finalisedNames) {
 			assert.equal(await ens.owner(namehash.hash(name + '.eth')), account);
@@ -190,7 +166,7 @@ contract('RegistrarMigration', function (accounts) {
 	});
 
 	it('should not allow migrating a name twice', async () => {
-		await expectFailure(registrarMigration.migrate(sha3("name"), {from: otherAccount}));
+		await exceptions.expectFailure(registrarMigration.migrate(sha3("name"), {from: otherAccount}));
 	});
 
 	it('should not update the registry for names controlled by contracts', async () => {
@@ -246,6 +222,6 @@ contract('RegistrarMigration', function (accounts) {
 	});
 
 	it('should not allow new registrations on the old registrar', async () => {
-		await expectFailure(oldRegistrar.register(sha3("testname"), registrantAccount, 86400, {from: controllerAccount}));
+		await exceptions.expectFailure(oldRegistrar.register(sha3("testname"), registrantAccount, 86400, {from: controllerAccount}));
 	});
 });

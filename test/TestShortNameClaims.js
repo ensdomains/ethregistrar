@@ -1,52 +1,21 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
-const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const ShortNameClaims = artifacts.require('./ShortNameClaims');
 const SimplePriceOracle = artifacts.require('./SimplePriceOracle.sol');
-var Promise = require('bluebird');
 const dns = require('../lib/dns.js');
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
 const toBN = require('web3-utils').toBN;
 
-const DAYS = 24 * 60 * 60;
-const SALT = sha3('foo');
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-const OPEN = 0;
 const REVIEW = 1;
 const FINAL = 2;
 
 const PENDING = 0;
 const APPROVED = 1;
 const DECLINED = 2;
-const WITHDRAWN = 3;
 
-const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.send({
-		jsonrpc: "2.0",
-		"method": "evm_increaseTime",
-		params: [delay]}, done)
-	}
-);
-
-async function expectFailure(call) {
-	let tx;
-	try {
-		tx = await call;
-	} catch (error) {
-		// Assert ganache revert exception
-		assert.include(
-			error.message,
-			'revert'
-		);
-	}
-	if(tx !== undefined) {
-		assert.isTrue(tx.receipt.status == false || parseInt(tx.receipt.status) == 0);
-	}
-}
+const { exceptions } = require("@ensdomains/test-utils");
 
 contract('ShortNameClaims', function (accounts) {
 	const ownerAccount = accounts[0];
@@ -105,7 +74,9 @@ contract('ShortNameClaims', function (accounts) {
 	});
 
 	it('should fail to register a prefix of a name if its suffix is not eth', async () => {
-		await expectFailure(claims.submitPrefixClaim(dns.hexEncodeName('foobar.test.'), claimantAccount, 'test@example.com', {value: 31536000}));
+		await exceptions.expectFailure(
+			claims.submitPrefixClaim(dns.hexEncodeName('foobar.test.'), claimantAccount, 'test@example.com', {value: 31536000})
+		);
 	});
 
 	it('should permit a DNS name owner to register a claim on a combined name + tld', async () => {
@@ -118,24 +89,35 @@ contract('ShortNameClaims', function (accounts) {
 	});
 
 	it('should not allow subdomains to be used in a claim', async () => {
-		await expectFailure(claims.submitExactClaim(dns.hexEncodeName('foo.bar.test.'), claimantAccount, 'test@example.com', {value: 31536001}));
+		await exceptions.expectFailure(
+			claims.submitExactClaim(dns.hexEncodeName('foo.bar.test.'), claimantAccount, 'test@example.com', {value: 31536001})
+		);
 	});
 
 	it('should fail with insufficient payment', async () => {
-		await expectFailure(claims.submitExactClaim(dns.hexEncodeName('bar.test.'), claimantAccount, 'test@example.com', {value: 1000}));
+		await exceptions.expectFailure(
+			claims.submitExactClaim(dns.hexEncodeName('bar.test.'), claimantAccount, 'test@example.com', {value: 1000})
+		);
 	});
 
 	it('should reject claims that are too long or too short', async () => {
-		await expectFailure(claims.submitExactClaim(dns.hexEncodeName('hi.test.'), claimantAccount, 'test@example.com', {value: 31536000}));
+		await exceptions.expectFailure(
+			claims.submitExactClaim(dns.hexEncodeName("hi.test."), claimantAccount, 'test@example.com', {value: 31536000})
+		);
 	});
 
 	it('should reject duplicate claims', async () => {
-		await expectFailure(claims.submitExactClaim(dns.hexEncodeName("foo.test."), claimantAccount, 'test@example.com', {value: 31536000}));
+		await exceptions.expectFailure(
+			claims.submitExactClaim(dns.hexEncodeName("foo.test."), claimantAccount, 'test@example.com', {value: 31536000})
+		);
 	});
 
 	it('should not permit claim status to be set during the open phase', async () => {
 		const claimId = await claims.computeClaimId("footv", dns.hexEncodeName("foo.tv."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, true, {from: ownerAccount}));
+
+		await exceptions.expectFailure(
+			claims.setClaimStatus(claimId, true, {from: ownerAccount})
+		);
 	});
 
 	it('should close claims successfully', async () => {
@@ -145,7 +127,10 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not allow non-owners to set claim status', async () => {
 		const claimId = await claims.computeClaimId("footv", dns.hexEncodeName("foo.tv."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, true, {from: claimantAccount}));
+
+		await exceptions.expectFailure(
+			claims.setClaimStatus(claimId, true, {from: claimantAccount})
+		);
 	});
 
 	it('should allow the contract owner to set claim status', async () => {
@@ -181,7 +166,10 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not permit approving two claims for the same name', async () => {
 		const claimId = await claims.computeClaimId("foo", dns.hexEncodeName("fooeth.test."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, true, {from: ownerAccount}));
+
+		await exceptions.expectFailure(
+			claims.setClaimStatus(claimId, true, {from: ownerAccount})
+		);
 	});
 
 	it('should allow the ratifier to set claim status', async () => {
@@ -197,11 +185,11 @@ contract('ShortNameClaims', function (accounts) {
 
 	it('should not allow setting the status of nonexistent claims', async () => {
 		const claimId = await claims.computeClaimId("bleh", dns.hexEncodeName("bleh.test."), claimantAccount, 'test@example.com');
-		await expectFailure(claims.setClaimStatus(claimId, true, {from: ownerAccount}));
+		await exceptions.expectFailure(claims.setClaimStatus(claimId, true, {from: ownerAccount}));
 	});
 
 	it('should not permit ratification until all claims are resolved', async () => {
-		await expectFailure(claims.ratifyClaims({from: ratifierAccount}));
+		await exceptions.expectFailure(claims.ratifyClaims({from: ratifierAccount}));
 	});
 
 	it('should allow claimant to withdraw their claim', async () => {
@@ -211,7 +199,7 @@ contract('ShortNameClaims', function (accounts) {
 	});
 
 	it('should not permit the owner to ratify', async () => {
-		await expectFailure(claims.ratifyClaims({from: ownerAccount}));
+		await exceptions.expectFailure(claims.ratifyClaims({from: ownerAccount}));
 	});
 
 	it('should permit ratification once all claims are resolved', async () => {
@@ -238,7 +226,7 @@ contract('ShortNameClaims', function (accounts) {
 	});
 
 	it('should not self destruct while claims are unresolved', async () => {
-		await expectFailure(claims.destroy({from: ownerAccount}));
+		await exceptions.expectFailure(claims.destroy({from: ownerAccount}));
 	});
 
 	it('should resolve rejected claims', async () => {
