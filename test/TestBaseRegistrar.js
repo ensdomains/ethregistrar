@@ -109,7 +109,11 @@ contract('BaseRegistrar', function (accounts) {
 		var grace = await registrar.GRACE_PERIOD();
 		await evm.advanceTime(expires.toNumber() - ts + grace.toNumber() + 3600);
 
-		await exceptions.expectFailure(registrar.ownerOf(sha3("newname")));
+		try {
+			await registrar.ownerOf(sha3("newname"));
+			assert.fail("should throw an exception");
+		} catch(error) {}
+
 		await registrar.register(sha3("newname"), otherAccount, 86400, {from: controllerAccount});
 		assert.equal(await registrar.ownerOf(sha3("newname")), otherAccount);
 	});
