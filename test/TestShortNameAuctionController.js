@@ -1,39 +1,12 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
-const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ShortNameAuctionController = artifacts.require('./ShortNameAuctionController');
 const DummyProxyRegistry = artifacts.require('./mocks/DummyProxyRegistry');
-var Promise = require('bluebird');
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
-const toBN = require('web3-utils').toBN;
 
-const DAYS = 24 * 60 * 60;
-
-const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.send({
-		jsonrpc: "2.0",
-		"method": "evm_increaseTime",
-		params: [delay]}, done)
-	}
-);
-
-async function expectFailure(call) {
-	let tx;
-	try {
-		tx = await call;
-	} catch (error) {
-		// Assert ganache revert exception
-		assert.equal(
-			error.message,
-			'Returned error: VM Exception while processing transaction: revert'
-		);
-	}
-	if(tx !== undefined) {
-		assert.equal(parseInt(tx.receipt.status), 0);
-	}
-}
+const { exceptions } = require("@ensdomains/test-utils");
 
 contract('ShortNameAuctionController', function (accounts) {
 	let ens;
@@ -86,7 +59,9 @@ contract('ShortNameAuctionController', function (accounts) {
 	});
 
 	it('should not allow registering an already-registered name', async () => {
-		await expectFailure(controller.register('foo', registrantAccount, {from: openseaAccount}));
+		await exceptions.expectFailure(
+			controller.register('foo', registrantAccount, {from: openseaAccount})
+		);
 	})
 
 	it('should permit the opensea proxy address to register a name', async () => {
@@ -98,6 +73,8 @@ contract('ShortNameAuctionController', function (accounts) {
 	});
 
 	it('should not permit anyone else to register a name', async () => {
-		await expectFailure(controller.register('baz', registrantAccount, {from: registrantAccount}));
+		await exceptions.expectFailure(
+			controller.register('baz', registrantAccount, {from: registrantAccount})
+		);
 	});
 });
