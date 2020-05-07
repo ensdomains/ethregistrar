@@ -3,7 +3,8 @@ const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const PublicResolver = artifacts.require('@ensdomains/resolver/PublicResolver');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
-const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
+const DummyOracle = artifacts.require('./DummyOracle');
+const StablePriceOracle = artifacts.require('./StablePriceOracle');
 const BulkRenewal = artifacts.require('./BulkRenewal');
 var Promise = require('bluebird');
 
@@ -39,7 +40,7 @@ async function expectFailure(call) {
 	}
 }
 
-contract('ETHRegistrarController', function (accounts) {
+contract('BulkRenewal', function (accounts) {
 	let ens;
 	let resolver;
 	let baseRegistrar;
@@ -62,13 +63,15 @@ contract('ETHRegistrarController', function (accounts) {
 		baseRegistrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 
 		// Set up a dummy price oracle and a controller
-		priceOracle = await SimplePriceOracle.new(1);
+        const dummyOracle = await DummyOracle.new(toBN(1000000000000000000));
+        priceOracle = await StablePriceOracle.new(dummyOracle.address, [1], baseRegistrar.address);
 		controller = await ETHRegistrarController.new(
 			baseRegistrar.address,
 			priceOracle.address,
 			600,
 			86400,
 			{from: ownerAccount});
+		await controller.setPriceOracle(priceOracle.address, {from: ownerAccount})
 		await baseRegistrar.addController(controller.address, {from: ownerAccount});
 		await baseRegistrar.addController(ownerAccount, {from: ownerAccount});
 		// Create the bulk registration contract

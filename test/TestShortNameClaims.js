@@ -1,7 +1,8 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ShortNameClaims = artifacts.require('./ShortNameClaims');
-const SimplePriceOracle = artifacts.require('./SimplePriceOracle.sol');
+const DummyOracle = artifacts.require('./DummyOracle');
+const StablePriceOracle = artifacts.require('./StablePriceOracle');
 const dns = require('../lib/dns.js');
 
 const namehash = require('eth-ens-namehash');
@@ -33,7 +34,8 @@ contract('ShortNameClaims', function (accounts) {
 		registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
 
-		const priceOracle = await SimplePriceOracle.new(1);
+        const dummyOracle = await DummyOracle.new(toBN(1000000000000000000));
+        const priceOracle = await StablePriceOracle.new(dummyOracle.address, [1], registrar.address);
 
 		claims = await ShortNameClaims.new(priceOracle.address, registrar.address, ratifierAccount);
 		await registrar.addController(claims.address, {from: ownerAccount});
