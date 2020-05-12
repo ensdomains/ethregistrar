@@ -1,6 +1,5 @@
-pragma solidity ^0.5.0;
+pragma solidity >=0.5.0;
 
-import "./BaseRegistrar.sol";
 import "./PriceOracle.sol";
 import "./SafeMath.sol";
 import "./StringUtils.sol";
@@ -19,8 +18,6 @@ contract StablePriceOracle is Ownable, PriceOracle {
     // Rent in base price units by length. Element 0 is for 1-length names, and so on.
     uint[] public rentPrices;
 
-    BaseRegistrar public registrar;
-
     // Oracle address
     DSValue public usdOracle;
 
@@ -28,9 +25,8 @@ contract StablePriceOracle is Ownable, PriceOracle {
 
     event RentPriceChanged(uint[] prices);
 
-    constructor(DSValue _usdOracle, uint[] memory _rentPrices, address _registrar) public {
+    constructor(DSValue _usdOracle, uint[] memory _rentPrices) public {
         usdOracle = _usdOracle;
-        registrar = BaseRegistrar(_registrar);
         setPrices(_rentPrices);
     }
 
@@ -40,7 +36,9 @@ contract StablePriceOracle is Ownable, PriceOracle {
             len = rentPrices.length;
         }
         require(len > 0);
+        
         uint basePrice = rentPrices[len - 1].mul(duration);
+        basePrice.add(premium(name, expires, duration));
 
         uint ethPrice = uint(usdOracle.read());
         return basePrice.mul(1e18).div(ethPrice);
@@ -50,7 +48,9 @@ contract StablePriceOracle is Ownable, PriceOracle {
      * @dev Sets rent prices.
      * @param _rentPrices The price array. Each element corresponds to a specific
      *                    name length; names longer than the length of the array
-     *                    default to the price of the last element.
+     *                    default to the price of the last element. Values are
+     *                    in base price units, equal to one attodollar (1e-18
+     *                    dollar) each.
      */
     function setPrices(uint[] memory _rentPrices) public onlyOwner {
         rentPrices = _rentPrices;
@@ -64,5 +64,9 @@ contract StablePriceOracle is Ownable, PriceOracle {
     function setOracle(DSValue _usdOracle) public onlyOwner {
         usdOracle = _usdOracle;
         emit OracleChanged(address(_usdOracle));
+    }
+
+    function premium(string memory name, uint expires, uint duration) public view returns(uint) {
+        return 0;
     }
 }

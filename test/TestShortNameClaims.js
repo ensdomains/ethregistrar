@@ -35,7 +35,7 @@ contract('ShortNameClaims', function (accounts) {
 		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
 
         const dummyOracle = await DummyOracle.new(toBN(1000000000000000000));
-        const priceOracle = await StablePriceOracle.new(dummyOracle.address, [1], registrar.address);
+        const priceOracle = await StablePriceOracle.new(dummyOracle.address, [1]);
 
 		claims = await ShortNameClaims.new(priceOracle.address, registrar.address, ratifierAccount);
 		await registrar.addController(claims.address, {from: ownerAccount});

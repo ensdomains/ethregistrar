@@ -33,7 +33,7 @@ contract('ETHRegistrarController', function (accounts) {
 		await ens.setSubnodeOwner('0x0', sha3('eth'), baseRegistrar.address);
 
         const dummyOracle = await DummyOracle.new(toBN(1000000000000000000));
-        priceOracle = await StablePriceOracle.new(dummyOracle.address, [1], baseRegistrar.address);
+        priceOracle = await StablePriceOracle.new(dummyOracle.address, [1]);
 		controller = await ETHRegistrarController.new(
 			baseRegistrar.address,
 			priceOracle.address,

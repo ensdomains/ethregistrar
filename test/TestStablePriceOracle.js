@@ -20,7 +20,7 @@ contract('StablePriceOracle', function (accounts) {
         var dummyOracle = await DummyOracle.new(toBN(10000000000000000000));
         // 4 attousd per second for 3 character names, 2 attousd per second for 4 character names,
         // 1 attousd per second for longer names.
-        priceOracle = await StablePriceOracle.new(dummyOracle.address, [0, 0, 4, 2, 1], registrar.address);
+        priceOracle = await StablePriceOracle.new(dummyOracle.address, [0, 0, 4, 2, 1]);
     });
 
     it('should return correct prices', async () => {
