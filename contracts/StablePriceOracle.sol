@@ -38,7 +38,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
         require(len > 0);
         
         uint basePrice = rentPrices[len - 1].mul(duration);
-        basePrice.add(premium(name, expires, duration));
+        basePrice = basePrice.add(_premium(name, expires, duration));
 
         uint ethPrice = uint(usdOracle.read());
         return basePrice.mul(1e18).div(ethPrice);
@@ -66,7 +66,18 @@ contract StablePriceOracle is Ownable, PriceOracle {
         emit OracleChanged(address(_usdOracle));
     }
 
-    function premium(string memory name, uint expires, uint duration) public view returns(uint) {
+    /**
+     * @dev Returns the pricing premium in wei.
+     */
+    function premium(string calldata name, uint expires, uint duration) external view returns(uint) {
+        uint ethPrice = uint(usdOracle.read());
+        return _premium(name, expires, duration).mul(1e18).div(ethPrice);
+    }
+
+    /**
+     * @dev Returns the pricing premium in internal base units.
+     */
+    function _premium(string memory name, uint expires, uint duration) internal view returns(uint) {
         return 0;
     }
 }
