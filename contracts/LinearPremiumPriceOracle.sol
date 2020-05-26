@@ -28,6 +28,7 @@ contract LinearPremiumPriceOracle is StablePriceOracle {
         // Calculate the discount off the maximum premium
         uint discount = premiumDecreaseRate.mul(now.sub(expires));
 
+        // If we've run out the premium period, return 0.
         if(discount > initialPremium) {
             return 0;
         }

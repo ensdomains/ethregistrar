@@ -11,10 +11,8 @@ contract('StablePriceOracle', function (accounts) {
     let priceOracle;
 
     before(async () => {
-		ens = await ENS.new();
-		registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'));
-		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
-		await registrar.addController(accounts[0]);
+        ens = await ENS.new();
+        registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'));
 
         // Dummy oracle with 1 ETH == 10 USD
         var dummyOracle = await DummyOracle.new(toBN(10000000000000000000));

@@ -7,14 +7,16 @@ const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
 const toBN = require('web3-utils').toBN;
 
+const DAY = 86400;
+
 contract('LinearPremiumPriceOracle', function (accounts) {
     let priceOracle;
 
     before(async () => {
-		ens = await ENS.new();
-		registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'));
-		await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
-		await registrar.addController(accounts[0]);
+        ens = await ENS.new();
+        registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'));
+        await ens.setSubnodeOwner('0x0', sha3('eth'), registrar.address);
+        await registrar.addController(accounts[0]);
 
         // Dummy oracle with 1 ETH == 2 USD
         var dummyOracle = await DummyOracle.new(toBN(2000000000000000000));
@@ -50,21 +52,21 @@ contract('LinearPremiumPriceOracle', function (accounts) {
     });
 
     it('should specify the maximum premium at the moment of expiration', async () => {
-        const ts = (await web3.eth.getBlock('latest')).timestamp - 90 * 86400;
+        const ts = (await web3.eth.getBlock('latest')).timestamp - 90 * DAY;
         assert.equal((await priceOracle.premium("foobar", ts, 0)).toString(), "50000000000000000000");
         assert.equal((await priceOracle.price("foobar", ts, 0)).toString(), "50000000000000000000");
     });
 
     it('should specify half the premium after half the interval', async () => {
-        const ts = (await web3.eth.getBlock('latest')).timestamp - (90 * 86400 + 50000);
+        const ts = (await web3.eth.getBlock('latest')).timestamp - (90 * DAY + 50000);
         assert.equal((await priceOracle.premium("foobar", ts, 0)).toString(), "25000000000000000000");
         assert.equal((await priceOracle.price("foobar", ts, 0)).toString(), "25000000000000000000");
     });
 
     it('should return correct times for price queries', async () => {
         const ts = await priceOracle.timeUntilPremium(0, await priceOracle.initialPremium());
-        assert.equal(ts.toNumber(), 90 * 86400);
+        assert.equal(ts.toNumber(), 90 * DAY);
         const ts2 = await priceOracle.timeUntilPremium(0, 0);
-        assert.equal(ts2.toNumber(), 90 * 86400 + 100000);
+        assert.equal(ts2.toNumber(), 90 * DAY + 100000);
     });
 });

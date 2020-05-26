@@ -9,7 +9,6 @@ interface DSValue {
     function read() external view returns (bytes32);
 }
 
-
 // StablePriceOracle sets a price in USD, based on an oracle.
 contract StablePriceOracle is Ownable, PriceOracle {
     using SafeMath for *;
