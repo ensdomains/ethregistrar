@@ -59,5 +59,12 @@ contract('LinearPremiumPriceOracle', function (accounts) {
         const ts = (await web3.eth.getBlock('latest')).timestamp - (90 * 86400 + 50000);
         assert.equal((await priceOracle.premium("foobar", ts, 0)).toString(), "25000000000000000000");
         assert.equal((await priceOracle.price("foobar", ts, 0)).toString(), "25000000000000000000");
-    })
+    });
+
+    it('should return correct times for price queries', async () => {
+        const ts = await priceOracle.timeUntilPremium(0, await priceOracle.initialPremium());
+        assert.equal(ts.toNumber(), 90 * 86400);
+        const ts2 = await priceOracle.timeUntilPremium(0, 0);
+        assert.equal(ts2.toNumber(), 90 * 86400 + 100000);
+    });
 });

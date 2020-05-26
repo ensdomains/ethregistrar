@@ -39,6 +39,6 @@ contract LinearPremiumPriceOracle is StablePriceOracle {
         expires = expires.add(GRACE_PERIOD);
         uint discount = initialPremium.sub(amount);
         uint duration = discount.div(premiumDecreaseRate);
-        return now + duration;
+        return expires + duration;
     }
 }
