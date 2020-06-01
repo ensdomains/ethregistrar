@@ -33,13 +33,24 @@ contract LinearPremiumPriceOracle is StablePriceOracle {
             return 0;
         }
         
-        return initialPremium.sub(discount);
+        return initialPremium - discount;
     }
 
+    /**
+     * @dev Returns the timestamp at which a name with the specified expiry date will have
+     *      the specified re-registration price premium.
+     * @param expires The timestamp at which the name expires.
+     * @param amount The amount, in wei, the caller is willing to pay
+     * @return The timestamp at which the premium for this domain will be `amount`.
+     */
     function timeUntilPremium(uint expires, uint amount) external view returns(uint) {
+        amount = weiToAttoUSD(amount);
+        require(amount <= initialPremium);
+
         expires = expires.add(GRACE_PERIOD);
+
         uint discount = initialPremium.sub(amount);
         uint duration = discount.div(premiumDecreaseRate);
-        return expires + duration;
+        return expires.add(duration);
     }
 }

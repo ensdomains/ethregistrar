@@ -39,8 +39,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
         uint basePrice = rentPrices[len - 1].mul(duration);
         basePrice = basePrice.add(_premium(name, expires, duration));
 
-        uint ethPrice = uint(usdOracle.read());
-        return basePrice.mul(1e18).div(ethPrice);
+        return attoUSDToWei(basePrice);
     }
 
     /**
@@ -69,8 +68,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
      * @dev Returns the pricing premium in wei.
      */
     function premium(string calldata name, uint expires, uint duration) external view returns(uint) {
-        uint ethPrice = uint(usdOracle.read());
-        return _premium(name, expires, duration).mul(1e18).div(ethPrice);
+        return attoUSDToWei(_premium(name, expires, duration));
     }
 
     /**
@@ -78,5 +76,15 @@ contract StablePriceOracle is Ownable, PriceOracle {
      */
     function _premium(string memory name, uint expires, uint duration) internal view returns(uint) {
         return 0;
+    }
+
+    function attoUSDToWei(uint amount) internal view returns(uint) {
+        uint ethPrice = uint(usdOracle.read());
+        return amount.mul(1e18).div(ethPrice);
+    }
+
+    function weiToAttoUSD(uint amount) internal view returns(uint) {
+        uint ethPrice = uint(usdOracle.read());
+        return amount.mul(ethPrice).div(1e18);
     }
 }

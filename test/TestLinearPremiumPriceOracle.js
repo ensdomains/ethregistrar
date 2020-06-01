@@ -64,7 +64,8 @@ contract('LinearPremiumPriceOracle', function (accounts) {
     });
 
     it('should return correct times for price queries', async () => {
-        const ts = await priceOracle.timeUntilPremium(0, await priceOracle.initialPremium());
+        const initialPremiumWei = toBN('50000000000000000000');
+        const ts = await priceOracle.timeUntilPremium(0, initialPremiumWei);
         assert.equal(ts.toNumber(), 90 * DAY);
         const ts2 = await priceOracle.timeUntilPremium(0, 0);
         assert.equal(ts2.toNumber(), 90 * DAY + 100000);
