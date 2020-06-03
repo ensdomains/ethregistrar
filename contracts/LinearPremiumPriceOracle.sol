@@ -11,6 +11,8 @@ contract LinearPremiumPriceOracle is StablePriceOracle {
     uint public initialPremium;
     uint public premiumDecreaseRate;
 
+    bytes4 constant private TIME_UNTIL_PREMIUM_ID = bytes4(keccak256("timeUntilPremium(uint,uint"));
+
     constructor(DSValue _usdOracle, uint[] memory _rentPrices, uint _initialPremium, uint _premiumDecreaseRate) public
         StablePriceOracle(_usdOracle, _rentPrices)
     {
@@ -52,5 +54,9 @@ contract LinearPremiumPriceOracle is StablePriceOracle {
         uint discount = initialPremium.sub(amount);
         uint duration = discount.div(premiumDecreaseRate);
         return expires.add(duration);
+    }
+
+    function supportsInterface(bytes4 interfaceID) public view returns (bool) {
+        return (interfaceID == TIME_UNTIL_PREMIUM_ID) || super.supportsInterface(interfaceID);
     }
 }

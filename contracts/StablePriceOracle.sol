@@ -24,6 +24,9 @@ contract StablePriceOracle is Ownable, PriceOracle {
 
     event RentPriceChanged(uint[] prices);
 
+    bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
+    bytes4 constant private ORACLE_ID = bytes4(keccak256("price(string,uint256,uint256)") ^ keccak256("premium(string,uint256,uint256)"));
+
     constructor(DSValue _usdOracle, uint[] memory _rentPrices) public {
         usdOracle = _usdOracle;
         setPrices(_rentPrices);
@@ -86,5 +89,9 @@ contract StablePriceOracle is Ownable, PriceOracle {
     function weiToAttoUSD(uint amount) internal view returns(uint) {
         uint ethPrice = uint(usdOracle.read());
         return amount.mul(ethPrice).div(1e18);
+    }
+
+    function supportsInterface(bytes4 interfaceID) public view returns (bool) {
+        return interfaceID == INTERFACE_META_ID || interfaceID == ORACLE_ID;
     }
 }
