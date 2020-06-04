@@ -1,43 +1,16 @@
 const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
-const HashRegistrar = artifacts.require('@ensdomains/ens/HashRegistrar');
 const PublicResolver = artifacts.require('@ensdomains/resolver/PublicResolver');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
 const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
 const BulkRenewal = artifacts.require('./BulkRenewal');
-var Promise = require('bluebird');
 
 const namehash = require('eth-ens-namehash');
 const sha3 = require('web3-utils').sha3;
-const toBN = require('web3-utils').toBN;
+const { exceptions } = require("@ensdomains/test-utils");
 
-const NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
 const ETH_LABEL = sha3('eth');
 const ETH_NAMEHASH = namehash.hash('eth');
-
-const advanceTime = Promise.promisify(function(delay, done) {
-	web3.currentProvider.send({
-		jsonrpc: "2.0",
-		"method": "evm_increaseTime",
-		params: [delay]}, done)
-	}
-);
-
-async function expectFailure(call) {
-	let tx;
-	try {
-		tx = await call;
-	} catch (error) {
-		// Assert ganache revert exception
-		assert.equal(
-			error.message,
-			'Returned error: VM Exception while processing transaction: revert'
-		);
-	}
-	if(tx !== undefined) {
-		assert.equal(parseInt(tx.receipt.status), 0);
-	}
-}
 
 contract('ETHRegistrarController', function (accounts) {
 	let ens;
@@ -91,7 +64,7 @@ contract('ETHRegistrarController', function (accounts) {
 	});
 
 	it('should raise an error trying to renew a nonexistent name', async () => {
-		await expectFailure(bulkRenewal.renewAll(['foobar'], 86400));
+		await exceptions.expectFailure(bulkRenewal.renewAll(['foobar'], 86400));
 	})
 
 	it('should permit bulk renewal of names', async () => {
