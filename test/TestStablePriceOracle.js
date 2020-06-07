@@ -1,12 +1,19 @@
+const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
+const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const DummyOracle = artifacts.require('./DummyOracle');
 const StablePriceOracle = artifacts.require('./StablePriceOracle');
 
+const namehash = require('eth-ens-namehash');
+const sha3 = require('web3-utils').sha3;
 const toBN = require('web3-utils').toBN;
 
 contract('StablePriceOracle', function (accounts) {
     let priceOracle;
 
     before(async () => {
+        ens = await ENS.new();
+        registrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'));
+
         // Dummy oracle with 1 ETH == 10 USD
         var dummyOracle = await DummyOracle.new(toBN(10000000000000000000));
         // 4 attousd per second for 3 character names, 2 attousd per second for 4 character names,
