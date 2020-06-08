@@ -2,7 +2,8 @@ const ENS = artifacts.require('@ensdomains/ens/ENSRegistry');
 const PublicResolver = artifacts.require('@ensdomains/resolver/PublicResolver');
 const BaseRegistrar = artifacts.require('./BaseRegistrarImplementation');
 const ETHRegistrarController = artifacts.require('./ETHRegistrarController');
-const SimplePriceOracle = artifacts.require('./SimplePriceOracle');
+const DummyOracle = artifacts.require('./DummyOracle');
+const StablePriceOracle = artifacts.require('./StablePriceOracle');
 const BulkRenewal = artifacts.require('./BulkRenewal');
 
 const namehash = require('eth-ens-namehash');
@@ -12,7 +13,7 @@ const { exceptions } = require("@ensdomains/test-utils");
 const ETH_LABEL = sha3('eth');
 const ETH_NAMEHASH = namehash.hash('eth');
 
-contract('ETHRegistrarController', function (accounts) {
+contract('BulkRenewal', function (accounts) {
 	let ens;
 	let resolver;
 	let baseRegistrar;
@@ -35,7 +36,8 @@ contract('ETHRegistrarController', function (accounts) {
 		baseRegistrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 
 		// Set up a dummy price oracle and a controller
-		priceOracle = await SimplePriceOracle.new(1);
+		const dummyOracle = await DummyOracle.new(toBN(1000000000000000000));
+		priceOracle = await StablePriceOracle.new(dummyOracle.address, [1]);
 		controller = await ETHRegistrarController.new(
 			baseRegistrar.address,
 			priceOracle.address,
@@ -57,7 +59,7 @@ contract('ETHRegistrarController', function (accounts) {
 		for(const name of ['test1', 'test2', 'test3']) {
 			await baseRegistrar.register(sha3(name), registrantAccount, 31536000);
 		}
-  });
+	});
 
 	it('should return the cost of a bulk renewal', async () => {
 		assert.equal(await bulkRenewal.rentPrice(['test1', 'test2'], 86400), 86400 * 2);
