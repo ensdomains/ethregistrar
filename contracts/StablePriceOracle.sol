@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity >=0.5.0;
 
 import "./PriceOracle.sol";
 import "./SafeMath.sol";
@@ -14,18 +14,48 @@ contract StablePriceOracle is Ownable, PriceOracle {
     using SafeMath for *;
     using StringUtils for *;
 
-    // Oracle address
-    DSValue usdOracle;
-
-    // Rent in attodollars (1e-18) per second
+    // Rent in base price units by length. Element 0 is for 1-length names, and so on.
     uint[] public rentPrices;
 
+    // Oracle address
+    DSValue public usdOracle;
+
     event OracleChanged(address oracle);
+
     event RentPriceChanged(uint[] prices);
 
+    bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
+    bytes4 constant private ORACLE_ID = bytes4(keccak256("price(string,uint256,uint256)") ^ keccak256("premium(string,uint256,uint256)"));
+
     constructor(DSValue _usdOracle, uint[] memory _rentPrices) public {
-        setOracle(_usdOracle);
+        usdOracle = _usdOracle;
         setPrices(_rentPrices);
+    }
+
+    function price(string calldata name, uint expires, uint duration) external view returns(uint) {
+        uint len = name.strlen();
+        if(len > rentPrices.length) {
+            len = rentPrices.length;
+        }
+        require(len > 0);
+        
+        uint basePrice = rentPrices[len - 1].mul(duration);
+        basePrice = basePrice.add(_premium(name, expires, duration));
+
+        return attoUSDToWei(basePrice);
+    }
+
+    /**
+     * @dev Sets rent prices.
+     * @param _rentPrices The price array. Each element corresponds to a specific
+     *                    name length; names longer than the length of the array
+     *                    default to the price of the last element. Values are
+     *                    in base price units, equal to one attodollar (1e-18
+     *                    dollar) each.
+     */
+    function setPrices(uint[] memory _rentPrices) public onlyOwner {
+        rentPrices = _rentPrices;
+        emit RentPriceChanged(_rentPrices);
     }
 
     /**
@@ -38,35 +68,30 @@ contract StablePriceOracle is Ownable, PriceOracle {
     }
 
     /**
-     * @dev Sets rent prices.
-     * @param _rentPrices The price array. Each element corresponds to a specific
-     *                    name length; names longer than the length of the array
-     *                    default to the price of the last element.
+     * @dev Returns the pricing premium in wei.
      */
-    function setPrices(uint[] memory _rentPrices) public onlyOwner {
-        rentPrices = _rentPrices;
-        emit RentPriceChanged(_rentPrices);
+    function premium(string calldata name, uint expires, uint duration) external view returns(uint) {
+        return attoUSDToWei(_premium(name, expires, duration));
     }
 
     /**
-     * @dev Returns the price to register or renew a name.
-     * @param name The name being registered or renewed.
-     * @param duration How long the name is being registered or extended for, in seconds.
-     * @return The price of this renewal or registration, in wei.
+     * @dev Returns the pricing premium in internal base units.
      */
-    function price(string calldata name, uint /*expires*/, uint duration) view external returns(uint) {
-        uint len = name.strlen();
-        if(len > rentPrices.length) {
-            len = rentPrices.length;
-        }
-        require(len > 0);
-        uint priceUSD = rentPrices[len - 1].mul(duration);
+    function _premium(string memory name, uint expires, uint duration) internal view returns(uint) {
+        return 0;
+    }
 
-        // Price of one ether in attodollars
+    function attoUSDToWei(uint amount) internal view returns(uint) {
         uint ethPrice = uint(usdOracle.read());
+        return amount.mul(1e18).div(ethPrice);
+    }
 
-        // priceUSD and ethPrice are both fixed-point values with 18dp, so we
-        // multiply the numerator by 1e18 before dividing.
-        return priceUSD.mul(1e18).div(ethPrice);
+    function weiToAttoUSD(uint amount) internal view returns(uint) {
+        uint ethPrice = uint(usdOracle.read());
+        return amount.mul(ethPrice).div(1e18);
+    }
+
+    function supportsInterface(bytes4 interfaceID) public view returns (bool) {
+        return interfaceID == INTERFACE_META_ID || interfaceID == ORACLE_ID;
     }
 }
