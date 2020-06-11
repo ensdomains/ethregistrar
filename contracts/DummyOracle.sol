@@ -1,17 +1,17 @@
 pragma solidity >=0.4.24;
 
 contract DummyOracle {
-    uint value;
+    int value;
 
-    constructor(uint _value) public {
+    constructor(int _value) public {
         set(_value);
     }
 
-    function set(uint _value) public {
+    function set(int _value) public {
         value = _value;
     }
 
-    function read() external view returns (bytes32) {
-        return bytes32(value);
+    function latestAnswer() public view returns(int256) {
+        return value;
     }
 }

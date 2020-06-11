@@ -37,7 +37,7 @@ contract('BulkRenewal', function (accounts) {
 		baseRegistrar = await BaseRegistrar.new(ens.address, namehash.hash('eth'), {from: ownerAccount});
 
 		// Set up a dummy price oracle and a controller
-		const dummyOracle = await DummyOracle.new(toBN(1000000000000000000));
+		const dummyOracle = await DummyOracle.new(toBN(100000000));
 		priceOracle = await StablePriceOracle.new(dummyOracle.address, [1]);
 		controller = await ETHRegistrarController.new(
 			baseRegistrar.address,

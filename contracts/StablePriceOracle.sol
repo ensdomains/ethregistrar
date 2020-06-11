@@ -5,9 +5,10 @@ import "./SafeMath.sol";
 import "./StringUtils.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
-interface DSValue {
-    function read() external view returns (bytes32);
+interface AggregatorInterface {
+  function latestAnswer() external view returns (int256);
 }
+
 
 // StablePriceOracle sets a price in USD, based on an oracle.
 contract StablePriceOracle is Ownable, PriceOracle {
@@ -18,7 +19,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
     uint[] public rentPrices;
 
     // Oracle address
-    DSValue public usdOracle;
+    AggregatorInterface public usdOracle;
 
     event OracleChanged(address oracle);
 
@@ -27,7 +28,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
     bytes4 constant private INTERFACE_META_ID = bytes4(keccak256("supportsInterface(bytes4)"));
     bytes4 constant private ORACLE_ID = bytes4(keccak256("price(string,uint256,uint256)") ^ keccak256("premium(string,uint256,uint256)"));
 
-    constructor(DSValue _usdOracle, uint[] memory _rentPrices) public {
+    constructor(AggregatorInterface _usdOracle, uint[] memory _rentPrices) public {
         usdOracle = _usdOracle;
         setPrices(_rentPrices);
     }
@@ -62,7 +63,7 @@ contract StablePriceOracle is Ownable, PriceOracle {
      * @dev Sets the price oracle address
      * @param _usdOracle The address of the price oracle to use.
      */
-    function setOracle(DSValue _usdOracle) public onlyOwner {
+    function setOracle(AggregatorInterface _usdOracle) public onlyOwner {
         usdOracle = _usdOracle;
         emit OracleChanged(address(_usdOracle));
     }
@@ -82,13 +83,13 @@ contract StablePriceOracle is Ownable, PriceOracle {
     }
 
     function attoUSDToWei(uint amount) internal view returns(uint) {
-        uint ethPrice = uint(usdOracle.read());
-        return amount.mul(1e18).div(ethPrice);
+        uint ethPrice = uint(usdOracle.latestAnswer());
+        return amount.mul(1e8).div(ethPrice);
     }
 
     function weiToAttoUSD(uint amount) internal view returns(uint) {
-        uint ethPrice = uint(usdOracle.read());
-        return amount.mul(ethPrice).div(1e18);
+        uint ethPrice = uint(usdOracle.latestAnswer());
+        return amount.mul(ethPrice).div(1e8);
     }
 
     function supportsInterface(bytes4 interfaceID) public view returns (bool) {

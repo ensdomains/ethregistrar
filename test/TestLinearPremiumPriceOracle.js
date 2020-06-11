@@ -19,7 +19,7 @@ contract('LinearPremiumPriceOracle', function (accounts) {
         await registrar.addController(accounts[0]);
 
         // Dummy oracle with 1 ETH == 2 USD
-        var dummyOracle = await DummyOracle.new(toBN(2000000000000000000));
+        var dummyOracle = await DummyOracle.new(toBN(200000000));
         // 4 attousd per second for 3 character names, 2 attousd per second for 4 character names,
         // 1 attousd per second for longer names.
         // Pricing premium starts out at 100 USD at expiry and decreases to 0 over 100k seconds (a bit over a day)
