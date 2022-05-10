@@ -33,12 +33,15 @@ contract ETHRegistrarController is Ownable {
     PriceOracle prices;
     uint public minCommitmentAge;
     uint public maxCommitmentAge;
+    uint public referralFee;
 
     mapping(bytes32=>uint) public commitments;
 
     event NameRegistered(string name, bytes32 indexed label, address indexed owner, uint cost, uint expires);
     event NameRenewed(string name, bytes32 indexed label, uint cost, uint expires);
     event NewPriceOracle(address indexed oracle);
+    event NewReferralFee(address indexed fee);
+    event ReferralPaid(address referrer, uint fee);
 
     constructor(BaseRegistrar _base, PriceOracle _prices, uint _minCommitmentAge, uint _maxCommitmentAge) public {
         require(_maxCommitmentAge > _minCommitmentAge);
@@ -85,6 +88,14 @@ contract ETHRegistrarController is Ownable {
       registerWithConfig(name, owner, duration, secret, address(0), address(0));
     }
 
+    function registerWithReferral(string calldata name, address owner, uint duration, bytes32 secret, address referrer) external payable {
+      registerWithConfig(name, owner, duration, secret, address(0), address(0));
+
+      uint fee = referralFee * rentPrice(name, duration) / 1000;
+      emit ReferralPaid(referrer, fee)
+      referrer.transfer( fee );
+    }
+
     function registerWithConfig(string memory name, address owner, uint duration, bytes32 secret, address resolver, address addr) public payable {
         bytes32 commitment = makeCommitmentWithConfig(name, owner, secret, resolver, addr);
         uint cost = _consumeCommitment(name, duration, commitment);
@@ -125,6 +136,16 @@ contract ETHRegistrarController is Ownable {
         }
     }
 
+    function renewWithReferral(string calldata name, uint duration, address referrer) external payable {
+        // standard renewal
+        renew(name, duration);
+
+        // fee is deducted from the revenue
+        uint fee = referralFee * rentPrice(name, duration) / 1000;
+        emit ReferralPaid(referrer, fee)
+        referrer.transfer(fee);
+    }
+
     function renew(string calldata name, uint duration) external payable {
         uint cost = rentPrice(name, duration);
         require(msg.value >= cost);
@@ -137,6 +158,12 @@ contract ETHRegistrarController is Ownable {
         }
 
         emit NameRenewed(name, label, cost, expires);
+    }
+
+    function setReferralFee(uint _referralFee) public onlyOwner {
+        require(_referralFee <= 1000, "Fee cannot be over 100%");
+        referralFee = _referralFee;
+        emit newReferralFee(_referralFee);
     }
 
     function setPriceOracle(PriceOracle _prices) public onlyOwner {
